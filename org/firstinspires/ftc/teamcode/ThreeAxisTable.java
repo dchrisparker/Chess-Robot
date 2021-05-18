@@ -1,4 +1,4 @@
-package org.firsinspires.ftc.teamcode;
+package org.firstinspires.ftc.teamcode;
 // Imports
 import com.qualcomm.robotcore.hardware.DcMotor;
 import com.qualcomm.robotcore.hardware.DcMotor.*;
@@ -41,7 +41,7 @@ public class ThreeAxisTable {
         button = (TouchSensor) this.hardwareMap.get(TouchSensor.class, "button");
         zAxis.scaleRange(Servo.MIN_POSITION, Servo.MAX_POSITION);
         sStart = 0.15;
-        sEnd = 0;
+        sEnd = 0.05;
         cMode = yAxis.getMode();
 
 
@@ -191,8 +191,8 @@ public class ThreeAxisTable {
         while (isBusy()) {}
 
 
-        setMode(cMode);
         setXPower(0);
+        setMode(cMode);
     }
 
     /**

@@ -1,4 +1,4 @@
-package org.firsinspires.ftc.teamcode;
+package org.firstinspires.ftc.teamcode;
 /**
  * A class designed to represent a 2D coordinate system
  * 

@@ -1,4 +1,4 @@
-package org.firsinspires.ftc.teamcode;
+package org.firstinspires.ftc.teamcode;
 // Imports
 import com.qualcomm.robotcore.eventloop.opmode.OpMode;
 import com.qualcomm.robotcore.util.ElapsedTime;
@@ -50,12 +50,12 @@ public class CoordinateTraversal extends OpMode {
 
         if (this.gamepad1.dpad_right) {
             //col += 1;
-            right = table.moveLeft();
+            right = table.moveRight();
             //table.setPositionMove(row, col);
         }
         if (this.gamepad1.dpad_left) {
             //col -= 1;
-            left = table.moveRight();
+            left = table.moveLeft();
             //table.setPositionMove(row, col);
         }
         if (this.gamepad1.dpad_up) {
