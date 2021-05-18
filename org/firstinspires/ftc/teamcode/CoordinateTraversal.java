@@ -69,16 +69,16 @@ public class CoordinateTraversal extends OpMode {
             //table.setPositionMove(row, col);
         } 
         if (this.gamepad1.right_bumper) {
-            table.moveHalfRight();
+            table.setPositionMove(table.getRow()+1, table.getCol()+1);
         }
         if (this.gamepad1.left_bumper) {
-            table.moveHalfLeft();
+            table.setPositionMove(table.getRow()-1, table.getCol()-1);
         }
         if (this.gamepad1.right_trigger > 0) {
-            table.moveUpRight();
+            table.moveHalfRight();
         }
         if (this.gamepad1.left_trigger > 0) {
-            table.moveUpLeft();
+            table.moveHalfLeft();
         }
         if (this.gamepad1.left_stick_button) {
             table.center();

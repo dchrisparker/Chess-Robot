@@ -21,6 +21,7 @@ public class ThreeAxisTest extends OpMode
     {
         table = new ThreeAxisTable(hardwareMap);
         table.setMode(DcMotor.RunMode.RUN_USING_ENCODER);
+        table.setZeroMode(DcMotor.ZeroPowerBehavior.BRAKE);
     }
     
     public void loop() 

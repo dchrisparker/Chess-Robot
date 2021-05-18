@@ -1,10 +1,13 @@
 package org.firstinspires.ftc.teamcode;
+import java.util.concurrent.TimeUnit;
+
 // Imports
 import com.qualcomm.robotcore.hardware.DcMotor;
 import com.qualcomm.robotcore.hardware.DcMotor.*;
 import com.qualcomm.robotcore.hardware.HardwareMap;
 import com.qualcomm.robotcore.hardware.Servo;
 import com.qualcomm.robotcore.hardware.TouchSensor;
+import com.qualcomm.robotcore.util.ElapsedTime;
 
 /**
  * A class representing the Three(ish) Axis Table
@@ -21,6 +24,7 @@ public class ThreeAxisTable {
     private double sStart; // Bottom of servo range
     private double sEnd; // Top of servo range
     protected DcMotor.RunMode cMode; // Current motor mode
+    protected ElapsedTime timer;
 
     /**
      * Constructs new ThreeAxisTable object
@@ -40,7 +44,7 @@ public class ThreeAxisTable {
         zAxis = (Servo) this.hardwareMap.get(Servo.class, "zAxis");
         button = (TouchSensor) this.hardwareMap.get(TouchSensor.class, "button");
         zAxis.scaleRange(Servo.MIN_POSITION, Servo.MAX_POSITION);
-        sStart = 0.15;
+        sStart = 0.225;
         sEnd = 0.05;
         cMode = yAxis.getMode();
 
@@ -243,6 +247,12 @@ public class ThreeAxisTable {
      * Raises Z-Axis to max position (vertical)
      */
     public void raiseZ() {
+        timer = new ElapsedTime();
+        for (int pos = (int)sStart*100; pos > (int)(sEnd*100); pos--) {
+            timer.reset();
+            while(timer.time(TimeUnit.MILLISECONDS) < 10) {} // Waits
+            zAxis.setPosition((double)pos/100);
+        }
         zAxis.setPosition(sEnd);
     }
 
@@ -250,6 +260,12 @@ public class ThreeAxisTable {
      * Lowers Z-Axis to lowest position (below horizontal)
      */
     public void lowerZ() {
+        timer = new ElapsedTime();
+        for (int pos = (int)sEnd*100; pos < (int)(sStart*100); pos++) {
+            timer.reset();
+            while(timer.time(TimeUnit.MILLISECONDS) < 10) {} // Waits
+            zAxis.setPosition((double)pos/100);
+        }
         zAxis.setPosition(sStart);
     }
 

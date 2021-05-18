@@ -185,13 +185,29 @@ public class CoordinateTable extends ThreeAxisTable {
      * @param power Power to move at
      */
     public void setPositionMove(int row, int col, double power) {
+        setPositionMove(row, col, power, power);
+    }
+
+    /**
+     * Sets motor position using the provided row, column, and power. Will not exit until
+     * motor stops.
+     * @param row Row to move to
+     * @param col Column to move to
+     * @param xPow X Power
+     * @param yPow Y Power
+     */
+    public void setPositionMove(int row, int col, double xPow, double yPow) {
+        this.row = row;
+        this.col = col;
+
         // Sets target position to coordinates of square
         int[] xy = board.getCoords(row, col);
         setTargetPosition(xy[0], xy[1]);
 
         // Starts movement
         setMode(RunMode.RUN_TO_POSITION); 
-        setPower(power);
+        setXPower(xPow);
+        setYPower(yPow);
 
         while (isBusy()) {} // Waits
 
@@ -277,7 +293,7 @@ public class CoordinateTable extends ThreeAxisTable {
      */
     public boolean moveHalfUp() {
         if (row+1 < maxRow || rowHalf < 1) { // Checks maxima
-            moveX((int)Math.round(getXPos() + rowHalf*board.getXJump())); // Moves halfway up
+            moveX((int)Math.round(getXPos() + rowHalf*(board.getXJump()/2))); // Moves halfway up
 
             halfCheckUp(); // Updates rowHalf
 
@@ -294,7 +310,7 @@ public class CoordinateTable extends ThreeAxisTable {
      */
     public boolean moveHalfDown() { // Checks maxima
         if (row-1 >= 0 || rowHalf > -1) {
-            moveX((int)Math.round(getXPos() + rowHalf*board.getXJump())); // Moves halfway down
+            moveX((int)Math.round(getXPos() + rowHalf*(board.getXJump()/2))); // Moves halfway down
 
             halfCheckDown(); // Updates rowHalf
 
@@ -312,7 +328,7 @@ public class CoordinateTable extends ThreeAxisTable {
         if (col+1 < maxCol || colHalf < 1) { // Checks maxima
             halfCheckRight(); // Updates colHalf
             
-            moveY((int)Math.round(getYPos() + colHalf*board.getYJump())); // Moves halfway right
+            moveY((int)Math.round(getYPos() + colHalf*(board.getYJump()/2))); // Moves halfway right
 
             return true;
         } else {
@@ -328,7 +344,7 @@ public class CoordinateTable extends ThreeAxisTable {
         if (col-1 >= 0 || colHalf > -1) { // Checks maxima
             halfCheckLeft(); // Updates colHalf
             
-            moveY((int)Math.round(getYPos() + colHalf*board.getYJump())); // Moves halfway left
+            moveY((int)Math.round(getYPos() + colHalf*(board.getYJump()/2))); // Moves halfway left
 
             return true;
         } else {
@@ -381,7 +397,7 @@ public class CoordinateTable extends ThreeAxisTable {
     private void halfCheckUp() {
         switch (rowHalf) { // This isn't optimal but it works 
             case 1:
-                rowHalf = -1;
+                rowHalf = 0;
                 row++; // Rollover (forwards)
                 break;
             case 0:
@@ -407,7 +423,7 @@ public class CoordinateTable extends ThreeAxisTable {
                 rowHalf = -1;
                 break;
             case -1:
-                rowHalf = 1;
+                rowHalf = 0;
                 row--; // Rollover (backwards)
                 break;
         }
@@ -421,7 +437,7 @@ public class CoordinateTable extends ThreeAxisTable {
     private void halfCheckRight() {
         switch (colHalf) {
             case 1:
-                colHalf = -1;
+                colHalf = 0;
                 col++; // Rollover (forwards)
                 break;
             case 0:
@@ -447,7 +463,7 @@ public class CoordinateTable extends ThreeAxisTable {
                 rowHalf = -1;
                 break;
             case -1:
-                colHalf = 1;
+                colHalf = 0;
                 col--; // Rollover (backwards)
                 break;
         }
