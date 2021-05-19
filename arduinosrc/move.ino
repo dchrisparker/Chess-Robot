@@ -15,7 +15,7 @@
 void setup()
 {
   Serial.begin(9600);
-  Wire.begin(); // join i2c bus (address optional for master)
+  Wire.begin(8); // join i2c bus (address optional for master)
 }
 
 String str;
@@ -24,15 +24,12 @@ void loop()
 {
   while (Serial.available() > 0) {
     str = Serial.readString();
-    if (Serial.read() == '\n') {
-      Serial.print("Echo: " + str);
-    }
   }
 
-  // Wire.beginTransmission(4); // transmit to device #4
-  // Wire.write("x is ");        // sends five bytes
-  // Wire.endTransmission();    // stop transmitting
+  Wire.beginTransmission(4); // transmit to device #4
+  Wire.write("x is ");        // sends five bytes
+  Wire.endTransmission();    // stop transmitting
 
-  // delay(500);
+  delay(500);
 }
 
