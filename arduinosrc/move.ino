@@ -16,20 +16,33 @@ void setup()
 {
   Serial.begin(9600);
   Wire.begin(8); // join i2c bus (address optional for master)
+  Wire.onReceive(DataReceive);
+  Wire.onRequest(DataRequest);
 }
 
 String str;
+String strSend = "hello";
 
 void loop()
 {
   while (Serial.available() > 0) {
-    str = Serial.readString();
+    strSend = Serial.readString();
   }
-
-  Wire.beginTransmission(4); // transmit to device #4
-  Wire.write("x is ");        // sends five bytes
-  Wire.endTransmission();    // stop transmitting
 
   delay(500);
 }
 
+
+void DataReceive(int numBytes)
+{
+  while(Wire.available()) 
+  { 
+    str = Wire.readString();
+  }
+  Serial.print(str);
+}
+
+void DataRequest()
+{
+  Wire.write("Hello");
+}
