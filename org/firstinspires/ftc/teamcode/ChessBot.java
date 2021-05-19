@@ -7,15 +7,13 @@ import com.qualcomm.robotcore.util.ElapsedTime;
 import android.os.Environment;
 
 public class ChessBot {
-    private final String PATH;
 
-	private CoordinateTable table; 
+    private CoordinateTable table; 
     private int row;
     private int col;
 
-    public ChessBot(String path, HardwareMap hardwareMap) {
-        PATH = path;
-        table = new CoordinateTable(8, 8, hardwareMap, PATH)
-
+    public ChessBot(HardwareMap hardwareMap, String path) {
+        table = new CoordinateTable(8, 8, hardwareMap, path);
+        
     }
 }
