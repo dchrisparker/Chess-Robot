@@ -15,7 +15,7 @@ public class ChessBot {
 
     public ChessBot(String path, HardwareMap hardwareMap) {
         PATH = path;
-        table = new CoordinateTable(8, 8, hardwareMap, PATH)
+        table = new CoordinateTable(8, 8, hardwareMap, PATH);
 
     }
 }

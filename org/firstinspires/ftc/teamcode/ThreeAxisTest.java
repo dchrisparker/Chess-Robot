@@ -40,7 +40,7 @@ public class ThreeAxisTest extends OpMode
         // Movement with stick
         table.setXPower(-this.gamepad1.left_stick_y);
         table.setYPower(this.gamepad1.left_stick_x);
-        //table.moveZ(this.gamepad1.right_trigger);
+        table.moveZ(this.gamepad1.right_trigger);
         
         // Testing methods
         if (this.gamepad1.left_bumper) {
@@ -49,14 +49,6 @@ public class ThreeAxisTest extends OpMode
         
         if (this.gamepad1.right_bumper) { 
             table.raiseZ();
-        }
-        
-        if (this.gamepad1.left_stick_button) {
-            table.setZeroMode(DcMotor.ZeroPowerBehavior.FLOAT);
-        }
-        
-        if (this.gamepad1.right_stick_button) {
-            table.setZeroMode(DcMotor.ZeroPowerBehavior.BRAKE);
         }
         
         if (this.gamepad1.x) { // Set new origin
