@@ -26,6 +26,7 @@ public class ChessBot {
     private int row;
     private int col;
 
+
     public ChessBot(HardwareMap hardwareMap, String path) {
         table = new CoordinateTable(8, 8, hardwareMap, path);
         pieces = new char[][]
@@ -58,6 +59,7 @@ public class ChessBot {
     public void sendTransmission(int iReg, byte[] b) {
         arduino.write(8, b);
     }
+
 
     public String getConInfo() {
         return arduino.getConnectionInfo();
