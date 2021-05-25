@@ -6,25 +6,30 @@ import pathlib
 from subprocess import Popen, PIPE, STDOUT
 from typing import Any, List
 
+
 class Stockfish:
-    def __init__(self, enginePath: str, hash=32, threads=4):
+    def __init__(self, enginePath: str, threads=4, hash=32, limitStrength=False, elo=2850, slowMover=100):
         self.path = enginePath
-        self.pos = ""
+        self.pos = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"
         self.inLog = []
         self.outLog = []
 
-        self._start(hash, threads)
-        
-    def _start(self, hash: int, threads: int):
+        self._start(threads, hash, limitStrength, elo, slowMover)
+        self.newGame() # 23
+
+    def _start(self, threads: int, hash: int, limitStrength: bool, elo: int, slowMover: int):
         self.eng = Popen(self.path, stdout=PIPE, stdin=PIPE, text=True)
         self.sendCommand("uci")
-        self.sendCommand("setoption name Hash value {}".format(hash))
-        self.sendCommand("setoption name Threads value {}".format(threads))
+        self.setOption("Threads", threads)
+        self.setOption("Hash", hash)
+        self.setOption("UCI_LimitStrength", limitStrength)
+        self.setOption("UCI_Elo", elo)
+        self.setOption("Slow Mover", slowMover)
         self.sendCommand("isready")
-        
-        self._printLines(29) # Predetermined value, program will hang if increased
-        self._flushOut # Clears stdout
 
+        # Predetermined value, program will hang if increased
+        self._printLines(29)
+        self._flushOut  # Clears stdout
 
     def dumpInLog(self) -> None:
         print(self.inLog)
@@ -34,13 +39,24 @@ class Stockfish:
 
     def newGame(self) -> None:
         self.sendCommand("ucinewgame")
-        
+
+    def sendMove(self, move: str) -> None:
+        self.sendCommand("position ")
+
+    def displayBoard(self):
+        self._flushOut()
+        self.sendCommand("d")
+        self._printLines(23)
+
     def sendCommand(self, command: str) -> None:
         if not self.eng.stdin:
             raise BrokenPipeError
         self.eng.stdin.write(f"{command}\n")
         self._flushIn()
         self.inLog.append(command)
+
+    def setOption(self, name: str, value: Any):
+        self.sendCommand(f"setoption name {name} value {value}")
 
     def _flushIn(self):
         self.eng.stdin.flush()
@@ -69,7 +85,6 @@ class Stockfish:
 
         for line in lines:
             print(line, end="")
-
 
     def close(self) -> None:
         self.__del__()
