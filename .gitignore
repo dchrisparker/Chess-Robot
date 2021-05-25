@@ -3,3 +3,4 @@ robot.code-workspace
 samples
 depreciated
 cal.csv
+engine/__pycache__
