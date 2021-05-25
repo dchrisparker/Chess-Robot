@@ -23,19 +23,10 @@ class UCIEngine:
         
         self.printStatus()
 
-        print()
+        # print()
+        # self.dumpInLog()
+        # self.dumpOutLog()
 
-        self.dumpInLog()
-        self.dumpOutLog()
-
-        # stdout = []
-
-        # for item in out:
-        #     stdout.append(item[0])
-
-        # for item in stdout:
-        #     for line in item.split("\n"):
-        #         print(line)
 
     def dumpInLog(self) -> None:
         print(self.inLog)
@@ -50,19 +41,6 @@ class UCIEngine:
         lines = self._getLines()
         for line in lines:
             print(line)
-
-    def _getLines(self) -> List[str]:
-        rtn = []
-
-        r = None
-
-        r = self._readLine()
-
-        while r != "":
-            rtn.append(r)
-            r = self._readLine()
-
-        return rtn
         
     def sendCommand(self, command: str) -> None:
         if not self.eng.stdin:
@@ -81,9 +59,20 @@ class UCIEngine:
         if not self.eng.stdout:
             raise BrokenPipeError
 
-        x = self.eng.stdout.readline().strip()
+        x = self.eng.stdout.readline()
         self.outLog.append(x)
         return x
+
+    def _getLines(self) -> List[str]:
+        rtn = []
+        r = None
+
+        r = self._readLine()
+        while r != "":
+            rtn.append(r)
+            r = self._readLine()
+
+        return rtn
 
     def close(self) -> None:
         self.__del__()
@@ -96,6 +85,10 @@ class UCIEngine:
 def main():
     """UCIEngine tester"""
     eng = UCIEngine("stockfish_13.exe")
+    for i in range(10, 0, -1):
+        eng.sendCommand(input("Command: "))
+        print(eng.outLog[-1])
+        print(f"\n{i}\n")
     eng.close()
 
 
