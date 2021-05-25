@@ -6,9 +6,10 @@ import pathlib
 from subprocess import Popen, PIPE, STDOUT
 from typing import Any, List
 
-class UCIEngine:
+class Stockfish:
     def __init__(self, enginePath: str, hash=32, threads=4):
         self.path = enginePath
+        self.pos = ""
         self.inLog = []
         self.outLog = []
 
@@ -21,11 +22,8 @@ class UCIEngine:
         self.sendCommand("setoption name Threads value {}".format(threads))
         self.sendCommand("isready")
         
-        self.printStatus()
-
-        # print()
-        # self.dumpInLog()
-        # self.dumpOutLog()
+        self._printLines(29) # Predetermined value, program will hang if increased
+        self._flushOut # Clears stdout
 
 
     def dumpInLog(self) -> None:
@@ -35,12 +33,7 @@ class UCIEngine:
         print(self.outLog)
 
     def newGame(self) -> None:
-        pass
-
-    def printStatus(self) -> List[str]:
-        lines = self._getLines()
-        for line in lines:
-            print(line)
+        self.sendCommand("ucinewgame")
         
     def sendCommand(self, command: str) -> None:
         if not self.eng.stdin:
@@ -63,16 +56,20 @@ class UCIEngine:
         self.outLog.append(x)
         return x
 
-    def _getLines(self) -> List[str]:
+    def _getLines(self, buffer: int) -> List[str]:
         rtn = []
-        r = None
 
-        r = self._readLine()
-        while r != "":
-            rtn.append(r)
-            r = self._readLine()
+        for i in range(buffer):
+            rtn.append(self._readLine())
 
         return rtn
+
+    def _printLines(self, buffer: int) -> None:
+        lines = self._getLines(buffer)
+
+        for line in lines:
+            print(line, end="")
+
 
     def close(self) -> None:
         self.__del__()
@@ -84,11 +81,8 @@ class UCIEngine:
 
 def main():
     """UCIEngine tester"""
-    eng = UCIEngine("stockfish_13.exe")
-    for i in range(10, 0, -1):
-        eng.sendCommand(input("Command: "))
-        print(eng.outLog[-1])
-        print(f"\n{i}\n")
+    eng = Stockfish("stockfish_13.exe")
+
     eng.close()
 
 
