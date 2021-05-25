@@ -12,6 +12,15 @@ import java.nio.charset.StandardCharsets;
 
 //import org.firstinspires.ftc.teamcode.wire.*;
 
+/**
+ * IDEAS:
+ * 
+ * Use usb instead 
+ * Ex. com.qualcomm.robotcore.hardware.usb ... 
+ *     com.qualcomm.robotcore.hardware.usb.serial
+ *     com.qualcomm.robotcore.hardware.usb.serial.SerialPort 
+ */
+
 import android.os.Environment;
 
 public class ChessBot {
