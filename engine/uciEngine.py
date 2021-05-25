@@ -2,23 +2,31 @@
 
 import os
 import subprocess
-import time
+import pathlib
 from subprocess import Popen, PIPE, STDOUT
+from typing import Any, List
 
 class UCIEngine:
-    def __init__(self, enginePath, hash=32, threads=4):
+    def __init__(self, enginePath: str, hash=32, threads=4):
         self.path = enginePath
+        self.inLog = []
+        self.outLog = []
 
-        self.start(hash, threads)
+        self._start(hash, threads)
         
-    def start(self, hash, threads):
-        self.eng = Popen([], stdout=PIPE, stdin=PIPE, stderr=STDOUT, text=True, executable=self.path)
-        self.eng.stdin.write("uci\n")
-        self.eng.stdin.write("setoption name Hash value {}".format(hash) + "\n")
-        self.eng.stdin.write("setoption name Threads value {}".format(threads) + "\n")
-        self.eng.stdin.write("isready\n")
+    def _start(self, hash: int, threads: int):
+        self.eng = Popen(self.path, stdout=PIPE, stdin=PIPE, text=True)
+        self.sendCommand("uci")
+        self.sendCommand("setoption name Hash value {}".format(hash))
+        self.sendCommand("setoption name Threads value {}".format(threads))
+        self.sendCommand("isready")
         
-        print(self.getLines())
+        self.printStatus()
+
+        print()
+
+        self.dumpInLog()
+        self.dumpOutLog()
 
         # stdout = []
 
@@ -29,40 +37,66 @@ class UCIEngine:
         #     for line in item.split("\n"):
         #         print(line)
 
+    def dumpInLog(self) -> None:
+        print(self.inLog)
 
-    def newGame(self):
+    def dumpOutLog(self) -> None:
+        print(self.outLog)
+
+    def newGame(self) -> None:
         pass
 
-    # def run(self, command):
-    #     rtn = subprocess.check_output(command, stderr=subprocess.STDOUT, stdout=subprocess.PIPE, text=True)
-    #     print(rtn)
-    #     return rtn
-
-    def printStatus(self):
-        lines = self.getLines()
+    def printStatus(self) -> List[str]:
+        lines = self._getLines()
         for line in lines:
             print(line)
 
-    def getLines(self):
-        r = self.eng.stdout.readline()
+    def _getLines(self) -> List[str]:
+        rtn = []
 
-        rtn = [r]
+        r = None
+
+        r = self._readLine()
 
         while r != "":
             rtn.append(r)
-            r = self.eng.stdout.readline()
+            r = self._readLine()
 
-        return r
+        return rtn
         
+    def sendCommand(self, command: str) -> None:
+        if not self.eng.stdin:
+            raise BrokenPipeError
+        self.eng.stdin.write(f"{command}\n")
+        self._flushIn()
+        self.inLog.append(command)
 
+    def _flushIn(self):
+        self.eng.stdin.flush()
 
-    def close(self):
-        self.eng.close()
+    def _flushOut(self):
+        self.eng.stdout.flush()
+
+    def _readLine(self):
+        if not self.eng.stdout:
+            raise BrokenPipeError
+
+        x = self.eng.stdout.readline().strip()
+        self.outLog.append(x)
+        return x
+
+    def close(self) -> None:
+        self.__del__()
+
+    def __del__(self) -> None:
+        self.sendCommand("quit")
+        self.eng.kill()
 
 
 def main():
     """UCIEngine tester"""
     eng = UCIEngine("stockfish_13.exe")
+    eng.close()
 
 
 if __name__ == "__main__":
