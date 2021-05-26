@@ -1,25 +1,24 @@
 # By Chris Parker
 
-import os
-import subprocess
-import pathlib
 from subprocess import Popen, PIPE, STDOUT
 from typing import Any, List
+from pythonutil.nbreader import NonBlockingStreamReader as NBSR
 
-
-class Stockfish:
+class UCIEngine:
     def __init__(self, enginePath: str, threads=4, hash=32, limitStrength=False, elo=2850, slowMover=100):
         self.path = enginePath
         self.pos = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"
         self.inLog = []
         self.outLog = []
+        self.reader = None
 
         self._start(threads, hash, limitStrength, elo, slowMover)
-        self.newGame() # 23
+        self.newGame()
 
     def _start(self, threads: int, hash: int, limitStrength: bool, elo: int, slowMover: int):
-        self.eng = Popen(self.path, stdout=PIPE, stdin=PIPE, text=True)
-        self.sendCommand("uci")
+        self.eng = Popen(self.path, stdout=PIPE, stdin=PIPE, text=True) # Starting stockfish engine
+        self.reader = NBSR(self.eng.stdout)
+        self.sendCommand("uci") # Telling engine 
         self.setOption("Threads", threads)
         self.setOption("Hash", hash)
         self.setOption("UCI_LimitStrength", limitStrength)
@@ -27,9 +26,8 @@ class Stockfish:
         self.setOption("Slow Mover", slowMover)
         self.sendCommand("isready")
 
-        # Predetermined value, program will hang if increased
-        self._printLines(29)
-        self._flushOut  # Clears stdout
+        self._printLines()
+        self._flushOut()  # Clears stdout
 
     def dumpInLog(self) -> None:
         print(self.inLog)
@@ -40,15 +38,13 @@ class Stockfish:
     def newGame(self) -> None:
         self.sendCommand("ucinewgame")
 
-    def sendMove(self, move: str) -> None:
-        self.sendCommand("position ")
+    def sendMoves(self, moves: str) -> None:
+        self.sendPosMoves(self.pos, moves)
 
-    def displayBoard(self):
-        self._flushOut()
-        self.sendCommand("d")
-        self._printLines(23)
+    def sendPosMoves(self, position: str, moves: str) -> None:
+        self.sendCommand(f"position fen {position} moves {moves}")
 
-    def sendCommand(self, command: str) -> None:
+    def sendCommand(self, command: str, reads=0):
         if not self.eng.stdin:
             raise BrokenPipeError
         self.eng.stdin.write(f"{command}\n")
@@ -68,20 +64,23 @@ class Stockfish:
         if not self.eng.stdout:
             raise BrokenPipeError
 
-        x = self.eng.stdout.readline()
-        self.outLog.append(x)
+        x = self.reader.readline()
+        if x: 
+            self.outLog.append(x)
         return x
 
-    def _getLines(self, buffer: int) -> List[str]:
+    def _readLines(self, buffer=-1) -> List[str]:
         rtn = []
-
-        for i in range(buffer):
-            rtn.append(self._readLine())
+        
+        if buffer <= 0:
+            x = self._readLine()
+            while x:
+                rtn.append(x)
 
         return rtn
 
-    def _printLines(self, buffer: int) -> None:
-        lines = self._getLines(buffer)
+    def _printLines(self, buffer=-1) -> None:
+        lines = self._readLines(buffer)
 
         for line in lines:
             print(line, end="")
@@ -93,10 +92,15 @@ class Stockfish:
         self.sendCommand("quit")
         self.eng.kill()
 
+class Stockfish(UCIEngine):
+    def displayBoard(self):
+        self._flushOut()
+        self.sendCommand("d")
+        self._printLines(23)
 
 def main():
     """UCIEngine tester"""
-    eng = Stockfish("stockfish_13.exe")
+    eng = UCIEngine("stockfish_13.exe")
 
     eng.close()
 
