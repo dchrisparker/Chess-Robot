@@ -1,5 +1,6 @@
 # By Chris Parker
 
+from time import sleep
 from subprocess import Popen, PIPE, STDOUT
 from typing import Any, List
 from pythonutil.nbreader import NonBlockingStreamReader as NBSR
@@ -7,7 +8,6 @@ from pythonutil.nbreader import NonBlockingStreamReader as NBSR
 class UCIEngine:
     def __init__(self, enginePath: str, threads=4, hash=32, limitStrength=False, elo=2850, slowMover=100):
         self.path = enginePath
-        self.pos = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"
         self.inLog = []
         self.outLog = []
         self.reader = None
@@ -17,14 +17,20 @@ class UCIEngine:
 
     def _start(self, threads: int, hash: int, limitStrength: bool, elo: int, slowMover: int):
         self.eng = Popen(self.path, stdout=PIPE, stdin=PIPE, text=True) # Starting stockfish engine
+        sleep(0.01)
         self.reader = NBSR(self.eng.stdout)
-        self.sendCommand("uci") # Telling engine 
+        sleep(0.01)
+        self.sendCommand("uci") # Telling engine to use uci
+
+        # Setting options
         self.setOption("Threads", threads)
         self.setOption("Hash", hash)
         self.setOption("UCI_LimitStrength", limitStrength)
         self.setOption("UCI_Elo", elo)
         self.setOption("Slow Mover", slowMover)
         self.sendCommand("isready")
+
+        sleep(0.1)
 
         self._printLines()
         self._flushOut()  # Clears stdout
@@ -38,8 +44,8 @@ class UCIEngine:
     def newGame(self) -> None:
         self.sendCommand("ucinewgame")
 
-    def sendMoves(self, moves: str) -> None:
-        self.sendPosMoves(self.pos, moves)
+    def sendPos(self, position: str) -> None:
+        self.sendCommand(f"position fen {position}")
 
     def sendPosMoves(self, position: str, moves: str) -> None:
         self.sendCommand(f"position fen {position} moves {moves}")
@@ -76,6 +82,14 @@ class UCIEngine:
             x = self._readLine()
             while x:
                 rtn.append(x)
+                x = self._readLine()
+        else:
+            x = self._readLine()
+            i = 0
+            while x and i < buffer:
+                rtn.append(x)
+                x = self._readLine()
+                i+=1
 
         return rtn
 
@@ -94,13 +108,15 @@ class UCIEngine:
 
 class Stockfish(UCIEngine):
     def displayBoard(self):
-        self._flushOut()
         self.sendCommand("d")
-        self._printLines(23)
+        sleep(0.1)
+        self._printLines()
 
 def main():
-    """UCIEngine tester"""
-    eng = UCIEngine("stockfish_13.exe")
+    """UCIEngine & Stockfish tester"""
+    eng = Stockfish("stockfish_13.exe")
+
+    eng.displayBoard()
 
     eng.close()
 
