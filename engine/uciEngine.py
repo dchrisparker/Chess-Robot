@@ -6,6 +6,7 @@ from typing import Any, List
 from pythonutil.nbreader import NonBlockingStreamReader as NBSR
 
 class UCIEngine:
+    # TODO: Add propper comments
     def __init__(self, enginePath: str, threads=4, hash=32, limitStrength=False, elo=2850, slowMover=100):
         self.path = enginePath
         self.inLog = []
