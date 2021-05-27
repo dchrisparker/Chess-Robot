@@ -5,3 +5,6 @@ depreciated
 cal.csv
 engine/__pycache__
 engine/pythonutil/__pycache__
+engine/log.txt
+cal.csv
+ThreeAxis.xml

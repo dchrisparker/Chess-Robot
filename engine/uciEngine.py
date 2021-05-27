@@ -1,11 +1,14 @@
 # By Chris Parker
 
-from os import PathLike, stat
-from time import sleep
-from subprocess import Popen, PIPE, STDOUT
-from typing import Any, List, Iterable, Tuple, Union, Optional
-from pythonutil.nbreader import NonBlockingStreamReader as NBSR
 from exceptions import InvalidEngineError
+from logging import debug
+from os import PathLike, stat
+from subprocess import PIPE, STDOUT, Popen
+from time import sleep
+from typing import Any, Iterable, List, Optional, Tuple, Union
+
+from pythonutil.nbreader import NonBlockingStreamReader as NBSR
+
 
 class UCIEngine:
     # TODO: Add propper comments
@@ -14,6 +17,7 @@ class UCIEngine:
         self.path = enginePath
         self.inLog = []
         self.outLog = []
+        self.debugOn = False
 
         # Starting engine
         self.eng = Popen(self.path, stdout=PIPE, stdin=PIPE, text=True)
@@ -29,7 +33,6 @@ class UCIEngine:
         if self._readLines()[-1] != "uciok\n":
             raise InvalidEngineError(self.path)
             
-
         # Setting options
         for setting in boolOpts:
             self.sendCommand(f"setoption name {str(setting)}")
@@ -38,7 +41,7 @@ class UCIEngine:
             self.setOption(setting, options[setting])
 
         # Checking if engine is ready
-        # Required to start searches
+        # NOTE: Required to start searches
         self.isReady()
 
         sleep(0.1)
@@ -86,6 +89,21 @@ class UCIEngine:
         else: 
             return False 
 
+    def stop(self) -> None:
+        self.sendCommand("stop")
+
+    def debug(self) -> bool:
+        command = "debug "
+        if self.debugOn:
+            command += "off"
+            self.debugOn = False
+        else:
+            command += "on"
+            self.debugOn = True
+
+        self.sendCommand(command)
+        return self.debugOn
+
 
     # Sending commands
 
@@ -116,6 +134,7 @@ class UCIEngine:
 
     def sendPosMoves(self, position: str, moves: str) -> None:
         self.sendCommand(f"position fen {position} moves {moves}")
+
 
     # Reading from engine stdout
 
@@ -157,16 +176,33 @@ class UCIEngine:
 
 
     # Utility
+
     @staticmethod
     def _moveSeqToString(seq: Iterable) -> str:
         rtn = ""
         for item in seq:
             rtn += str(item) + " "
 
+    def _writeLogsToFile(self, logPath: Union[str, PathLike]) -> None:
+        f = open(logPath, "w")
+        f.write("UCIEngine Log File\n\n")
+        f.write("IN:\n")
+        for line in self.inLog:
+            f.write(f"{line}\n")
+        f.write("\n==================================================\n")
+        f.write("\nOUT:\n")
+        f.writelines(self.outLog)
+        f.write("\n\nEND")
+        f.close()
+
 
     # Stoping engine
 
-    def close(self) -> None:
+    def close(self, saveLogs: bool=False, logPath: Union[str, PathLike]="") -> None:
+        
+        if saveLogs:
+            self._writeLogsToFile(logPath)
+
         self.__del__()
 
     def __del__(self) -> None:
@@ -181,6 +217,8 @@ class Stockfish(UCIEngine):
         sleep(0.1)
         self.printLines()
 
+
+
 def main():
     """UCIEngine & Stockfish tester"""
     eng = Stockfish("stockfish_13.exe", "UCI_LimitStrength", UCI_Elo = 1880, Threads = 4, Hash = 1024)
@@ -190,7 +228,7 @@ def main():
 
     eng.dumpInLog()
 
-    eng.close()
+    eng.close(saveLogs=True, logPath="log.txt")
 
 
 
