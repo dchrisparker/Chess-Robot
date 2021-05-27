@@ -1,40 +1,51 @@
 # By Chris Parker
 
+from os import PathLike, stat
 from time import sleep
 from subprocess import Popen, PIPE, STDOUT
-from typing import Any, List
+from typing import Any, List, Iterable, Tuple, Union, Optional
 from pythonutil.nbreader import NonBlockingStreamReader as NBSR
+from exceptions import InvalidEngineError
 
 class UCIEngine:
     # TODO: Add propper comments
-    def __init__(self, enginePath: str, threads=4, hash=32, limitStrength=False, elo=2850, slowMover=100):
+    def __init__(self, enginePath: Union[str, PathLike], *boolOpts: str,
+    **options: Union[str, int]):
+
         self.path = enginePath
         self.inLog = []
         self.outLog = []
-        self.reader = None
 
-        self._start(threads, hash, limitStrength, elo, slowMover)
-        self.newGame()
-
-    def _start(self, threads: int, hash: int, limitStrength: bool, elo: int, slowMover: int):
-        self.eng = Popen(self.path, stdout=PIPE, stdin=PIPE, text=True) # Starting stockfish engine
+        # Starting engine
+        self.eng = Popen(self.path, stdout=PIPE, stdin=PIPE, text=True)
         sleep(0.01)
         self.reader = NBSR(self.eng.stdout)
         sleep(0.01)
-        self.sendCommand("uci") # Telling engine to use uci
+        self.sendCommand("uci") # Telling engine to use uci protocol
+        sleep(0.1)
+
+        if self._readLines()[-1] != "uciok":
+            raise InvalidEngineError
+            
 
         # Setting options
-        self.setOption("Threads", threads)
-        self.setOption("Hash", hash)
-        self.setOption("UCI_LimitStrength", limitStrength)
-        self.setOption("UCI_Elo", elo)
-        self.setOption("Slow Mover", slowMover)
-        self.sendCommand("isready")
+        for setting in boolOpts:
+            self.sendCommand(str(setting))
+
+        for setting in options:
+            self.setOption(setting, options[setting])
+
+        # Checking if engine is ready
+        # Required to start searches
+        self.isReady()
 
         sleep(0.1)
 
-        self._printLines()
+        # self._printLines()
         self._flushOut()  # Clears stdout
+
+
+    # Printing info
 
     def dumpInLog(self) -> None:
         print(self.inLog)
@@ -42,32 +53,69 @@ class UCIEngine:
     def dumpOutLog(self) -> None:
         print(self.outLog)
 
+    def printLines(self, buffer: int=-1) -> None:
+        lines = self._readLines(buffer)
+
+        for line in lines:
+            print(line, end="")
+
+
+    # Sending preset commands 
+
     def newGame(self) -> None:
         self.sendCommand("ucinewgame")
 
-    def sendPos(self, position: str) -> None:
-        self.sendCommand(f"position fen {position}")
+    def go(self, *args: str, **kwargs: str) -> None:
 
-    def sendPosMoves(self, position: str, moves: str) -> None:
-        self.sendCommand(f"position fen {position} moves {moves}")
+        command = "go "
+        for arg in args:
+            command += f"{str(arg)} "
+        for item in kwargs:
+            command += f"{item} {str(kwargs[item])} "
 
-    def sendCommand(self, command: str, reads=0):
+        self.sendCommand(command)
+
+    def isReady(self) -> bool:
+        self.sendCommand("isready")
+        if self._readLines()[-1] == "isready":
+            return True
+        else: 
+            return False 
+
+
+    # Sending commands
+
+    def sendCommand(self, command: str, reads: int=0) -> None:
         if not self.eng.stdin:
             raise BrokenPipeError
         self.eng.stdin.write(f"{command}\n")
         self._flushIn()
         self.inLog.append(command)
 
-    def setOption(self, name: str, value: Any):
+    def setOption(self, name: str, value: Any) -> None:
         self.sendCommand(f"setoption name {name} value {value}")
+    
 
-    def _flushIn(self):
-        self.eng.stdin.flush()
+    # Sending positions/moves
 
-    def _flushOut(self):
-        self.eng.stdout.flush()
+    def sendMoveSeq(self, moves: Iterable) -> None:
+        movesStr: str
+        if type(moves) != str:
+            movesStr = self._moveSeqToString(moves)
+        else:
+            movesStr = moves
 
-    def _readLine(self):
+        self.sendCommand(f"position startpos moves {movesStr}")
+        
+    def sendPos(self, position: str) -> None:
+        self.sendCommand(f"position fen {position}")
+
+    def sendPosMoves(self, position: str, moves: str) -> None:
+        self.sendCommand(f"position fen {position} moves {moves}")
+
+    # Reading from engine stdout
+
+    def _readLine(self) -> str:
         if not self.eng.stdout:
             raise BrokenPipeError
 
@@ -76,7 +124,7 @@ class UCIEngine:
             self.outLog.append(x)
         return x
 
-    def _readLines(self, buffer=-1) -> List[str]:
+    def _readLines(self, buffer: int=-1) -> List[str]:
         rtn = []
         
         if buffer <= 0:
@@ -94,11 +142,25 @@ class UCIEngine:
 
         return rtn
 
-    def _printLines(self, buffer=-1) -> None:
-        lines = self._readLines(buffer)
 
-        for line in lines:
-            print(line, end="")
+    # Flusing stdout and stdin
+
+    def _flushIn(self) -> None:
+        self.eng.stdin.flush()
+
+    def _flushOut(self) -> None:
+        self.eng.stdout.flush()
+
+
+    # Utility
+    @staticmethod
+    def _moveSeqToString(seq: Iterable) -> str:
+        rtn = ""
+        for item in seq:
+            rtn += str(item) + " "
+
+
+    # Stoping engine
 
     def close(self) -> None:
         self.__del__()
@@ -107,15 +169,18 @@ class UCIEngine:
         self.sendCommand("quit")
         self.eng.kill()
 
+
+
 class Stockfish(UCIEngine):
-    def displayBoard(self):
+    def displayBoard(self) -> None:
         self.sendCommand("d")
         sleep(0.1)
-        self._printLines()
+        self.printLines()
 
 def main():
     """UCIEngine & Stockfish tester"""
     eng = Stockfish("stockfish_13.exe")
+    eng.newGame()
 
     eng.displayBoard()
 

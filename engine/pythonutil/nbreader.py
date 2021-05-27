@@ -17,7 +17,7 @@ class NonBlockingStreamReader:
         self._s = stream
         self._q = Queue()
 
-        def _populateQueue(stream, queue):
+        def _populateQueue(stream, queue: Queue):
             '''
             Collect lines from 'stream' and put them in 'queue'.
             '''
