@@ -9,8 +9,7 @@ from exceptions import InvalidEngineError
 
 class UCIEngine:
     # TODO: Add propper comments
-    def __init__(self, enginePath: Union[str, PathLike], *boolOpts: str,
-    **options: Union[str, int]):
+    def __init__(self, enginePath: Union[str, PathLike], *boolOpts: str, **options: Union[str, int]):
 
         self.path = enginePath
         self.inLog = []
@@ -19,18 +18,21 @@ class UCIEngine:
         # Starting engine
         self.eng = Popen(self.path, stdout=PIPE, stdin=PIPE, text=True)
         sleep(0.01)
+
+        # Starting reader
         self.reader = NBSR(self.eng.stdout)
         sleep(0.01)
-        self.sendCommand("uci") # Telling engine to use uci protocol
-        sleep(0.1)
 
-        if self._readLines()[-1] != "uciok":
-            raise InvalidEngineError
+        self.sendCommand("uci") # Telling engine to use uci protocol
+        sleep(0.5)
+
+        if self._readLines()[-1] != "uciok\n":
+            raise InvalidEngineError(self.path)
             
 
         # Setting options
         for setting in boolOpts:
-            self.sendCommand(str(setting))
+            self.sendCommand(f"setoption name {str(setting)}")
 
         for setting in options:
             self.setOption(setting, options[setting])
@@ -76,8 +78,10 @@ class UCIEngine:
         self.sendCommand(command)
 
     def isReady(self) -> bool:
+        self._readLines()
         self.sendCommand("isready")
-        if self._readLines()[-1] == "isready":
+        sleep(0.125)
+        if self._readLine() == "isready":
             return True
         else: 
             return False 
@@ -179,12 +183,15 @@ class Stockfish(UCIEngine):
 
 def main():
     """UCIEngine & Stockfish tester"""
-    eng = Stockfish("stockfish_13.exe")
+    eng = Stockfish("stockfish_13.exe", "UCI_LimitStrength", UCI_Elo = 1880, Threads = 4, Hash = 1024)
     eng.newGame()
 
     eng.displayBoard()
 
+    eng.dumpInLog()
+
     eng.close()
+
 
 
 if __name__ == "__main__":
