@@ -3,6 +3,7 @@
 from typing import *
 from abc import ABC, abstractmethod
 from chessEnum import Type, Column, Color
+import typing
 
 class Pair:
     def __init__(self, x, y):
@@ -218,13 +219,84 @@ class King(Piece):
         return King(self.color)
 
 class ChessBoard: 
+
     class Square:
-        def __init__(self, coordinates: Pair, piece: Piece):
+        def __init__(self, coordinates: Pair, piece: Union[Piece, None]):
             self.coords = coordinates
             self.piece = piece
-    class EmptySquare(Square):
-        def __init__(self, coordinates: Pair):
-            super().__init__(coordinates, None)
+
+    # BOARD START POSITIONS
+    # BACK_ROW_WHITE = (Rook(Color.WHITE), Knight(Color.WHITE), Bishop(Color.WHITE),
+    # Queen(Color.WHITE), King(Color.WHITE), Bishop(Color.WHITE) Pawn(Color.WHITE)) 
+    # wp = Pawn(Color.WHITE) # White pawn
+    
+    wr, wn, wb = Rook(Color.WHITE), Knight(Color.WHITE), Bishop(Color.WHITE)
+    wq, wk, wp = Queen(Color.WHITE), King(Color.WHITE), Pawn(Color.WHITE)
+
+    # BACK_ROW_BLACK = (Rook(Color.BLACK), Knight(Color.BLACK), Bishop(Color.BLACK), 
+    # Queen(Color.BLACK), King(Color.BLACK), Pawn(Color.BLACK))
+    # bp = Pawn(Color.WHITE) # Black pawn
+
+    br, bn, bb = Rook(Color.BLACK), Knight(Color.BLACK), Bishop(Color.BLACK)
+    bq, bk, bp = Queen(Color.BLACK), King(Color.BLACK), Pawn(Color.BLACK)
+
+    # Origin (A1) is at 0,0 (top, left)
+    DEFAULT_BOARD = ( 
+        (Square(Pair(0,0),wr), Square(Pair(0,1),wn), Square(Pair(0,2),wb), Square(Pair(0,3),wq), Square(Pair(0,4),wk), Square(Pair(0,5),wb), Square(Pair(0,6),wn), Square(Pair(0,7),wr)),
+        (Square(Pair(1,0),wp), Square(Pair(1,1),wp), Square(Pair(1,2),wp), Square(Pair(1,3),wp), Square(Pair(1,4),wp), Square(Pair(1,5),wp), Square(Pair(1,6),wp), Square(Pair(1,7),wp)),
+        (Square(Pair(2,0),None), Square(Pair(2,1),None), Square(Pair(2,2),None), Square(Pair(2,3),None), Square(Pair(2,4),None), Square(Pair(2,5),None), Square(Pair(2,6),None), Square(Pair(2,7),None)),
+        (Square(Pair(3,0),None), Square(Pair(3,1),None), Square(Pair(3,2),None), Square(Pair(3,3),None), Square(Pair(3,4),None), Square(Pair(3,5),None), Square(Pair(3,6),None), Square(Pair(3,7),None)),
+        (Square(Pair(4,0),None), Square(Pair(4,1),None), Square(Pair(4,2),None), Square(Pair(4,3),None), Square(Pair(4,4),None), Square(Pair(4,5),None), Square(Pair(4,6),None), Square(Pair(4,7),None)),
+        (Square(Pair(5,0),None), Square(Pair(5,1),None), Square(Pair(5,2),None), Square(Pair(5,3),None), Square(Pair(5,4),None), Square(Pair(5,5),None), Square(Pair(5,6),None), Square(Pair(5,7),None)),
+        (Square(Pair(6,0),bp), Square(Pair(6,1),bp), Square(Pair(6,2),bp), Square(Pair(6,3),bp), Square(Pair(6,4),bp), Square(Pair(6,5),bp), Square(Pair(6,6),bp), Square(Pair(6,7),bp)),
+        (Square(Pair(7,0),br), Square(Pair(7,1),bn), Square(Pair(7,2),bb), Square(Pair(7,3),bq), Square(Pair(7,4),bk), Square(Pair(7,5),bb), Square(Pair(7,6),bn), Square(Pair(7,7),br)),
+    )
+
+
+    
+    def __init__(self):
+        self.board = self.DEFAULT_BOARD
+        self.resetBoard()
+
+    def resetBoard(self):
+        pass
+        # Filling in white side
+        # for i in range(len(self.board[0])):
+        #     self.board[0][i] = self.Square(Pair(i, 0), self.BACK_ROW_WHITE[i])
+        
+        # for i in range(len(self.board[1])):
+        #     self.board[1][i] = self.Square(Pair(i, 1), self.wp)
+        
+        # # Filling in black side
+        # for i in range(len(self.board[7])):
+        #     self.board[7][i] = self.Square(Pair(i, 7), self.BACK_ROW_BLACK[i])
+
+        # for i in range(len(self.board[1])):
+        #     self.board[1][i] = self.Square(Pair(i, 6), self.bp)
+
+        # # Empty squares
+        # for row in range(2, 6):
+        #     for col in range(len(self.board[2])):
+        #         self.board[row][col] = self.Square(Pair(col, row), None)
+
+    def positionToFEN(self) -> str:
+        rtn = ""
+        
+
+    def __str__(self) -> str:
+        rtn = ""
+
+        for row in range(len(self.board)):
+            for col in range(len(self.board[row])):
+                rtn += f"{self.board[row][col].piece}"
+            rtn += "|"
+    
+    
+
+
+
+        
+
 
 
 class Chess:
