@@ -5,7 +5,7 @@ class Color(IntEnum):
         BLACK = -1
 
 class Type(Enum):
-    PAWN, ROOK, KNIGHT, BISHOP, QUEEN, KING = auto(), auto(), auto(), auto(), auto(), auto()
+    PAWN, ROOK, KNIGHT, BISHOP, QUEEN, KING = 'P', 'R', 'N', 'B', 'Q', 'K'
 
 class Column(IntEnum):
     A, B, C, D, E, F, G, H = tuple(range(0,8))

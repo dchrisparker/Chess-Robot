@@ -41,11 +41,11 @@ class Piece(ABC):
         return self.__str__()
 
     @abstractmethod
-    def isValidPath(self, start: Pair, end: Pair):
+    def isValidPath(self, start: Pair, end: Pair) -> Union[bool, Literal['c']]:
         pass
 
     @abstractmethod
-    def getPath(self, start: Pair, end: Pair):
+    def getPath(self, start: Pair, end: Pair) -> List[Pair]:
         pass
 
     @abstractmethod
@@ -224,23 +224,25 @@ class ChessBoard:
         def __init__(self, coordinates: Pair, piece: Union[Piece, None]):
             self.coords = coordinates
             self.piece = piece
+        
+        def __str__(self) -> str:
+            return str(self.piece)
 
-    # BOARD START POSITIONS
-    # BACK_ROW_WHITE = (Rook(Color.WHITE), Knight(Color.WHITE), Bishop(Color.WHITE),
-    # Queen(Color.WHITE), King(Color.WHITE), Bishop(Color.WHITE) Pawn(Color.WHITE)) 
-    # wp = Pawn(Color.WHITE) # White pawn
-    
+        def __repr__(self) -> str:
+            return self.__str__() + f"{self.coords.row},{self.coords.col}"
+
+    # GLOBAL CLASS VARIABLES
+
+    # Pieces 
+    # White    
     wr, wn, wb = Rook(Color.WHITE), Knight(Color.WHITE), Bishop(Color.WHITE)
     wq, wk, wp = Queen(Color.WHITE), King(Color.WHITE), Pawn(Color.WHITE)
 
-    # BACK_ROW_BLACK = (Rook(Color.BLACK), Knight(Color.BLACK), Bishop(Color.BLACK), 
-    # Queen(Color.BLACK), King(Color.BLACK), Pawn(Color.BLACK))
-    # bp = Pawn(Color.WHITE) # Black pawn
-
+    # Black
     br, bn, bb = Rook(Color.BLACK), Knight(Color.BLACK), Bishop(Color.BLACK)
     bq, bk, bp = Queen(Color.BLACK), King(Color.BLACK), Pawn(Color.BLACK)
 
-    # Origin (A1) is at 0,0 (top, left)
+    # Origin (A1) is at 0,0 (top-left)
     DEFAULT_BOARD = ( 
         (Square(Pair(0,0),wr), Square(Pair(0,1),wn), Square(Pair(0,2),wb), Square(Pair(0,3),wq), Square(Pair(0,4),wk), Square(Pair(0,5),wb), Square(Pair(0,6),wn), Square(Pair(0,7),wr)),
         (Square(Pair(1,0),wp), Square(Pair(1,1),wp), Square(Pair(1,2),wp), Square(Pair(1,3),wp), Square(Pair(1,4),wp), Square(Pair(1,5),wp), Square(Pair(1,6),wp), Square(Pair(1,7),wp)),
@@ -255,48 +257,84 @@ class ChessBoard:
 
     
     def __init__(self):
-        self.board = self.DEFAULT_BOARD
         self.resetBoard()
 
+    def canMove(self, piecePos: Pair, finalPos: Pair) -> bool:
+        sSquare = self.getSquare(piecePos)
+        fSquare = self.getSquare(finalPos)
+
+        if sSquare.piece == None:
+            return False
+        elif not sSquare.piece.isValidPath(piecePos, finalPos):
+            return False
+
+        path = sSquare.piece.getPath(piecePos, finalPos)
+
+        for i in range(len(path)):
+            if i < len(path)-1:
+                if path[i]:
+                    pass
+                # TODO: Finish method
+
+
+
+    def getSquare(self, squarePos: Pair):
+        return self.board[squarePos.y][squarePos.x]
+
     def resetBoard(self):
-        pass
-        # Filling in white side
-        # for i in range(len(self.board[0])):
-        #     self.board[0][i] = self.Square(Pair(i, 0), self.BACK_ROW_WHITE[i])
+        self.board = list(self.DEFAULT_BOARD) 
         
-        # for i in range(len(self.board[1])):
-        #     self.board[1][i] = self.Square(Pair(i, 1), self.wp)
-        
-        # # Filling in black side
-        # for i in range(len(self.board[7])):
-        #     self.board[7][i] = self.Square(Pair(i, 7), self.BACK_ROW_BLACK[i])
+    def FENPiecePlacement(self) -> str:
+        """Return a FEN string based off the current board position
 
-        # for i in range(len(self.board[1])):
-        #     self.board[1][i] = self.Square(Pair(i, 6), self.bp)
+        Returns
+        -------
+        str
+            Piece placement FEN string 
+            NOTE: This is not a complete FEN string, just the piece placement
 
-        # # Empty squares
-        # for row in range(2, 6):
-        #     for col in range(len(self.board[2])):
-        #         self.board[row][col] = self.Square(Pair(col, row), None)
-
-    def positionToFEN(self) -> str:
+        Reference
+        ---------
+        https://www.chessprogramming.org/Forsyth-Edwards_Notation
+        """
         rtn = ""
-        
+        digit = 0
 
+        # Piece placement
+        # Rank (from 8 to 1)
+        for rank in range(len(self.board)-1, -1, -1):
+            # File (from A to H)
+            for square in self.board[rank]:
+                piece = square.piece
+                
+                if piece != None: # If the square isn't empty
+                    if digit: # If there is a digit
+                        rtn += str(digit)
+                        digit = 0
+
+                    l = piece.type.value # Letter
+
+                    if piece.color == Color.BLACK:
+                        l = l.lower() # Black pieces are represented with lowercase
+
+                    rtn += l
+                else: # Must be an empty square
+                    digit += 1
+
+            if digit:
+                rtn += str(digit)
+                digit = 0
+            if rank != 0:
+                rtn += '/'
+
+        return rtn
+        
     def __str__(self) -> str:
-        rtn = ""
+        return self.FENPiecePlacement()
 
-        for row in range(len(self.board)):
-            for col in range(len(self.board[row])):
-                rtn += f"{self.board[row][col].piece}"
-            rtn += "|"
+    def __repr__(self) -> str:
+        return str(self.board)
     
-    
-
-
-
-        
-
 
 
 class Chess:
