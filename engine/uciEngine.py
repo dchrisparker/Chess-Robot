@@ -30,12 +30,12 @@ class UCIEngine:
 
         Parameters
         ----------
-        enginePath : str, PathLike
+        enginePath : str | PathLike
             Path of the chess engine
         *boolOpts : str
             Boolean (on or off) options. 
             Ex. `UCI_LimitStrength`
-        **options : str, int
+        **options : str | int
             Options with a name and value.
             Ex. `UCI_Elo value 2200`
             NOTE: Many engines have limits for these values. See documentation for these engines.
@@ -344,7 +344,7 @@ class UCIEngine:
 
         Parameters
         ----------
-        logPath : str, PathLike
+        logPath : str | PathLike
             The path for the log file. Will overwrite if file already exists.
         """
         f = open(logPath, "w")
@@ -371,7 +371,7 @@ class UCIEngine:
 
         Parameters
         ----------
-        logPath : str, PathLike, optional
+        logPath : str | PathLike, optional
             Used to write logs to file for debugging. Leave blank to non write to file, by default ""
         """
         

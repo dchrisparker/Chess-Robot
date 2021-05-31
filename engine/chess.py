@@ -1,38 +1,69 @@
 # By Chris Parker
 
-from typing import *
+import operator
 from abc import ABC, abstractmethod
-from chessEnum import Type, Column, Color
-import typing
+from exceptions import InvalidFENError
+from functools import cache
+from typing import *
+
+
+from chessEnum import Color, Column, Type
+
 
 class Pair:
-    def __init__(self, x, y):
-        self.x = x
+    """A class representing a coordinate on a chess board."""
+    def __init__(self, y: int, x: int):
+        """Construct a new Pair.
+
+        Parameters
+        ----------
+        y : int
+            Y value (row, rank, etc.)
+        x : int
+            X value (column, file, etc.)
+        """
         self.y = y
+        self.x = x
 
-        self.row = y
-        self.col = Column(x)
+        if x in list(Column):
+            self.row = y
+            self.col = Column(x)
 
+            self.rank = self.row
+            self.file = self.col
+    
     def getAlgCoords(self) -> str:
+        """Return the algebraic version of this coordinate."""
         return f"{self.col.name.lower()}{self.row+1}"
 
+    def isNegative(self) -> bool:
+        return True if self.x < 0 or self.y < 0 else False
+
+    def isAbove(self, maxY, maxX) -> bool:
+        return True if self.x > maxX or self.y > maxY else False
+
+    # SPECIAL METHODS
     def __str__(self) -> str:
-        return f"{self.x}, {self.y}"
+        return self.getAlgCoords()
     
     def __repr__(self) -> str:
-        return f"{self.x},{self.y}; {self.col.name}{self.row+1}"
+        return f"{self.y},{self.x}; {self.col.name}{self.row+1}"
 
     def __eq__(self, other) -> bool:
         return self.x == other.x and self.y == other.y
     
     def __bool__(self) -> bool:
-        return bool(self.x) or bool(self.y)
+        return bool(self.x) or bool(self.y) # Only returns false if both are 0 or None
+
+        
+        
 
 class Piece(ABC):
-    
+    """An abstract class representing a chess piece."""
     def __init__(self, color: Color, type: Type) -> None:
         self.color = color
         self.type = type
+        self.hasMoved = False
 
     def __str__(self) -> str:
         return f"{self.color.name} {self.type.name}"
@@ -52,6 +83,7 @@ class Piece(ABC):
     def clone(self):
         pass
     
+
 class Pawn(Piece):
     def __init__(self, color: Color):
         super().__init__(color, Type.PAWN)
@@ -82,19 +114,12 @@ class Pawn(Piece):
             path = [end]
         else: # If the pawn is moving straight 
             for i in range(1, abs(start.row-end.row)+1):
-                path.append(start.row + (i*self.color))
+                path.append(Pair(start.row + (i*self.color), start.x))
 
         return path
 
     def clone(self):
         return Pawn(self.color)
-
-    # def isCaptureValid(self, start: Pair, end: Pair):
-    #     if start.row + self.color == end.row:
-    #         if start.x + 1 == end.x or start.x - 1 == end.x:
-    #             return True
-
-    #     return False
 
         
 class Rook(Piece):
@@ -113,20 +138,40 @@ class Rook(Piece):
     
     def getPath(self, start: Pair, end: Pair):
         path: List[Pair] = []
+        pathLen: int
         
-        for i in range(1, (abs(start.x - end.x) or abs(start.y - end.y)) + 1): # Goes from 1 to length of path
+        if start.x < end.x:
+            xDir = 1
+        elif start.x > end.x:
+            xDir = -1
+        else:
+            xDir = 0
 
-            if start.x-end.x: # If x is not constant
-                path.append(Pair(start.x + i, start.y)) # Y is constant 
+        if start.y < end.y:
+            yDir = 1
+        elif start.y > end.y:
+            yDir = -1
+        else:
+            yDir = 0
+
+        if xDir:
+            pathLen = abs(start.x-end.x)
+        else:
+            pathLen = abs(start.y-end.y)
+
+        for i in range(1, pathLen): # Goes frm 1 to length of path
+
+            if xDir: # If x is not constant
+                path.append(Pair(start.y, start.x + i*xDir)) # Y is constant 
             else:
-                path.append(Pair(start.x, start.y + i)) # X is constant
+                path.append(Pair(start.y + i*yDir, start.x)) # X is constant
+            
 
         return path
     
     def clone(self):
         return Rook(self.color)
         
-
 
 class Knight(Piece):
     def __init__(self, color: Color):
@@ -148,6 +193,7 @@ class Knight(Piece):
     def clone(self):
         return Knight(self.color)
 
+
 class Bishop(Piece):
     def __init__(self, color: Color):
         super().__init__(color, Type.BISHOP)
@@ -162,18 +208,19 @@ class Bishop(Piece):
 
         # Finding x and y directions
         xDir = yDir = 1
-        if start.x-end.x > 0:
+        if start.x > end.x:
             xDir = -1
-        if start.y-end.y > 0:
+        if start.y > end.y:
             yDir = -1
 
-        for i in range(1, pathLen+1):
-            path.append(Pair(i*xDir, i*yDir))
+        for i in range(1, pathLen):
+            path.append(Pair(start.y + i*yDir, start.x + i*xDir))
 
         return path
 
     def clone(self):
         return Bishop(self.color)
+
 
 class Queen(Piece):
     def __init__(self, color: Color):
@@ -185,15 +232,15 @@ class Queen(Piece):
     def getPath(self, start: Pair, end: Pair):
 
         xDir = yDir = 0
-        if start.x-end.x > 0:
-            xDir = -1
-        elif start.x-end.x < 0:
+        if start.x < end.x:
             xDir = 1
+        elif start.x > end.x:
+            xDir = -1
 
-        if start.y-end.y > 0:
-            yDir = -1
-        elif start.y-end.y < 0:
+        if start.y < end.y:
             yDir = 1
+        elif start.y > end.y:
+            yDir = -1
 
         if xDir != 0 and yDir != 0:
             return Bishop(self.color).getPath(start, end)
@@ -218,6 +265,7 @@ class King(Piece):
     def clone(self):
         return King(self.color)
 
+
 class ChessBoard: 
 
     class Square:
@@ -229,7 +277,7 @@ class ChessBoard:
             return str(self.piece)
 
         def __repr__(self) -> str:
-            return self.__str__() + f"{self.coords.row},{self.coords.col}"
+            return self.__str__() + f"({self.coords.row},{self.coords.col})"
 
     # GLOBAL CLASS VARIABLES
 
@@ -253,37 +301,227 @@ class ChessBoard:
         (Square(Pair(6,0),bp), Square(Pair(6,1),bp), Square(Pair(6,2),bp), Square(Pair(6,3),bp), Square(Pair(6,4),bp), Square(Pair(6,5),bp), Square(Pair(6,6),bp), Square(Pair(6,7),bp)),
         (Square(Pair(7,0),br), Square(Pair(7,1),bn), Square(Pair(7,2),bb), Square(Pair(7,3),bq), Square(Pair(7,4),bk), Square(Pair(7,5),bb), Square(Pair(7,6),bn), Square(Pair(7,7),br)),
     )
-
-
     
+    # CONSTRUCTOR
     def __init__(self):
+        self.attackedSquaresW: List[Pair] = []
+        self.attackedSquaresB: List[Pair] = []
         self.resetBoard()
+        self.updateAttackedSquares()
 
-    def canMove(self, piecePos: Pair, finalPos: Pair) -> bool:
-        sSquare = self.getSquare(piecePos)
-        fSquare = self.getSquare(finalPos)
+    # MOVEMENT METHODS
+    def canMove(self, frm: Pair, to: Pair, *pseudoCap: Pair) -> Tuple[bool, Union[Literal['c'], None]]:
+        """Check if a piece can move using its own methods and checking the path it would take.
 
-        if sSquare.piece == None:
-            return False
-        elif not sSquare.piece.isValidPath(piecePos, finalPos):
-            return False
+        Parameters
+        ----------
+        frm : Pair
+            Starting square.
+        to : Pair
+            Ending square.
+        *pseudoCap : Pair
+            Squares that can be "captured" but are empty (e.g., en passant square),
 
-        path = sSquare.piece.getPath(piecePos, finalPos)
+        Returns
+        -------
+        Tuple[bool, Literal['c'] | None]
+            Return True if the piece can move or False if it cannot. Returns 'c' if the move would
+            result in a capture.
+        """
+        sSquare = self.getSquare(frm)
+        fSquare = self.getSquare(to)
+
+        valid = sSquare.piece.isValidPath(frm, to)
+
+        if (sSquare.piece == None) or (not valid) or (valid == 'c' and fSquare.piece == None):
+            # print(sSquare.piece, valid, fSquare.piece)
+            return False, None
+
+        if fSquare.piece != None and sSquare.piece.color == fSquare.piece.color:
+            # print(2)
+            return False, None
+
+        path = sSquare.piece.getPath(frm, to)
 
         for i in range(len(path)):
             if i < len(path)-1:
-                if path[i]:
-                    pass
-                # TODO: Finish method
+                if self.getSquare(path[i]).piece != None:
+                    return False, None
+            elif valid == 'c':
+                if fSquare.coords in pseudoCap:
+                    return True, 'c'
+                elif fSquare.piece == None:
+                    return False, None
 
+        return True, ('c' if fSquare.piece != None else None)
 
+    def move(self, frm: Pair, to: Pair) -> Union[Piece, None]:
+        """Move a piece from start square to end square.
 
-    def getSquare(self, squarePos: Pair):
+        Parameters
+        ----------
+        frm : Pair
+            Starting square.
+        to : Pair
+            Ending Square
+
+        Returns
+        -------
+        Piece | None
+            Return the piece captured or None if no piece was captured.
+        """
+        cSquare = self.getSquare(frm)
+        fSquare = self.getSquare(to)
+
+        cap = fSquare.piece
+        fSquare.piece = cSquare.piece
+        fSquare.piece.hasMoved = True
+        cSquare.piece = None
+
+        return cap
+
+    # MODIFIER METHODS
+    def setSquare(self, sqr: Pair, piece: Piece) -> None:
+        self.getSquare(sqr).piece = piece
+
+    def resetBoard(self) -> None:
+        self.board = list(self.DEFAULT_BOARD) 
+
+    def updateAttackedSquares(self):
+        """Update attackedSquaresW and attackedSquaresB to accurately show the squares under attack."""
+        def _cullAll():
+            """Format data after receiving coordinates from functions."""
+            def _cull(list: List[Pair]):
+                """Format data for one list."""
+                i = 0
+                while i < len(list):
+                    pair = list[i]
+                    if pair.isNegative() or pair.isAbove(len(self.board)-1, len(self.board[0])-1):
+                        del(list[i])
+                    else:
+                        i += 1
+
+                for i in range(len(list)):
+                    list[i] = [list[i], 1]
+
+                i = 0
+                while i < len(list):
+                    if i-1 >= 0 and list[i-1][0] == list[i][0]:
+                        list[i][1] += list[i-1][1]
+                        del(list[i-1])
+                    else:
+                        i += 1
+
+            _cull(self.attackedSquaresW)
+            _cull(self.attackedSquaresB)
+
+        def _byPawn(square: ChessBoard.Square) -> List[Pair]:
+            return [
+                Pair(square.coords.y + square.piece.color, square.coords.x-1),
+                Pair(square.coords.y + square.piece.color, square.coords.x+1)
+            ] # Pawns can only attack 2 squares
+        
+        def _byKing(square: ChessBoard.Square) -> List[Pair]:
+            return [
+                Pair(square.coords.y-1, square.coords.x-1), Pair(square.coords.y+1, square.coords.x+1), 
+                Pair(square.coords.y-1, square.coords.x+1), Pair(square.coords.y+1, square.coords.x-1), 
+                Pair(square.coords.y, square.coords.x+1),   Pair(square.coords.y, square.coords.x-1),
+                Pair(square.coords.y+1, square.coords.x),   Pair(square.coords.y-1, square.coords.x)
+            ] # Returns all squares around king. Invalid squares are removed later
+
+        def _byBishop(square: ChessBoard.Square) -> List[Pair]:
+            rtn = []
+            
+            # Every combination of directions
+            for yDir in (-1, 1):
+                for xDir in (-1, 1):
+                    y = square.coords.y + yDir
+                    x = square.coords.x + xDir
+
+                    while y < len(self.board) and y >= 0 and x < len(self.board[y]) and x >= 0:
+                        rtn.append(Pair(y, x))
+
+                        if self.board[y][x].piece != None:
+                            break # Stops when there is a peace in the path
+
+                        y += yDir
+                        x += xDir
+
+            return rtn
+
+        def _byRook(square: ChessBoard.Square) -> List[Pair]:
+
+            def _findStop(list: List[Pair]) -> List[Pair]:
+                r = []
+                for pair in list:
+                    r.append(pair)
+                    if self.board[pair.y][pair.x].piece != None:
+                        break # Stop when another piece is in the path
+
+                return r
+
+            y = square.coords.y
+            x = square.coords.x
+
+            # Maxima
+            maxY = len(self.board)-1
+            maxX = len(self.board[0])-1
+
+            # Paths to edges of board
+            maxYPath = square.piece.getPath(square.coords, Pair(maxY, x))
+            minYPath = square.piece.getPath(square.coords, Pair(0, x))
+
+            maxXPath = square.piece.getPath(square.coords, Pair(y, maxX))
+            minXPath = square.piece.getPath(square.coords, Pair(y, 0))
+
+            # Return all 4 paths rook covers
+            return _findStop(maxYPath) + _findStop(minYPath) + _findStop(maxXPath) + _findStop(minXPath)
+
+        def _byQueen(square: ChessBoard.Square) -> List[Pair]:
+            # Queens have the movement of a bishop and rook combined 
+            return _byBishop(square) + _byRook(square) 
+
+        def _byKnight(square: ChessBoard.Square) -> List[Pair]:
+            y = square.coords.y
+            x = square.coords.x
+            return [Pair(y+2, x+1), Pair(y+2, x-1), Pair(y-2, x+1), Pair(y-2, x-1),
+                    Pair(y+1, x+2), Pair(y+1, x-2), Pair(y-1, x+2), Pair(y-1, x-2)
+            ] # Returns all squares around knight. Invalid squares are removed later
+        
+        # Clears old lists
+        self.attackedSquaresB = []
+        self.attackedSquaresW = []
+
+        # Goes through every rank and file
+        for rank in self.board: 
+            for square in rank:
+                # Ensuring there is a piece on the square
+                if square.piece != None:
+                    if square.piece.color == Color.WHITE:
+                        # WARNING: This can be dangerous! It should be fine in this case but this may need to be 
+                        # reevaluated in a later program
+                        self.attackedSquaresW += eval("_by"+(square.piece.type.name.capitalize())+"(square)")
+                    else:
+                        self.attackedSquaresB += eval("_by"+(square.piece.type.name.capitalize())+"(square)")
+        
+        # Sort the lists with the y's and then the x's
+        self.attackedSquaresW.sort(key = lambda l : (l.y, l.x))
+        self.attackedSquaresB.sort(key = lambda l : (l.y, l.x))
+
+        _cullAll() # Format the data    
+    
+    # ACCESSOR METHODS
+    def getSquare(self, squarePos: Pair) -> Square:
         return self.board[squarePos.y][squarePos.x]
 
-    def resetBoard(self):
-        self.board = list(self.DEFAULT_BOARD) 
+    def getKingPosition(self, color: Color) -> Pair:
+        for rank in range(len(self.board)):
+            for file in range(len(self.board[rank])):
+                square = self.getSquare(Pair(rank, file))
+                if square.piece.type == Type.KING and square.piece.color == color:
+                    return Pair(rank, file)
         
+    # FEN METHODS
     def FENPiecePlacement(self) -> str:
         """Return a FEN string based off the current board position
 
@@ -301,9 +539,9 @@ class ChessBoard:
         digit = 0
 
         # Piece placement
-        # Rank (from 8 to 1)
+        # Rank (frm 8 to 1)
         for rank in range(len(self.board)-1, -1, -1):
-            # File (from A to H)
+            # File (frm A to H)
             for square in self.board[rank]:
                 piece = square.piece
                 
@@ -329,34 +567,77 @@ class ChessBoard:
 
         return rtn
         
+    def FENSetPosition(self, FEN: str) -> None:
+        """Set board position from FEN string.
+
+        Parameters
+        ----------
+        FEN : str
+            Full or partial FEN string.
+            NOTE: Only the position portion of the string is required. 
+            (e.g., "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR")
+
+        Raises
+        ------
+        InvalidFENError
+            If the FEN string is not correctly formatted.
+        """
+        FEN = FEN.strip()
+        lastRank = len(self.board)-1
+        rank = lastRank
+        file = 0
+        
+
+        for l in FEN:
+
+            if l.isalpha():
+                piece: Piece = None
+                try: # Could be unsafe. Use carefully
+                    if l.islower():
+                        piece = eval("self.b"+l)
+                    else:
+                        piece = eval("self.w"+l.lower())
+                except AttributeError:
+                    raise InvalidFENError(FEN)
+
+                self.setSquare(Pair(rank, file), piece)
+                file += 1
+            elif l.isnumeric():
+                for f in range(file, file+int(l)):
+                    self.setSquare(Pair(rank, f), None)
+                file += int(l)
+
+
+            if l == '/':
+                rank -= 1
+                if rank < 0:
+                    raise InvalidFENError(FEN)
+                file = 0
+
+            if l == ' ': # Must be the end of position section
+                break    # Other sections can be disguarded
+
+        self.updateAttackedSquares()
+            
+
+    # SPECIAL METHODS
     def __str__(self) -> str:
         return self.FENPiecePlacement()
 
     def __repr__(self) -> str:
-        return str(self.board)
-    
+        rtn = ""
+        for row in self.board:
+            rtn += repr(row) + '\n'
+
+        return rtn
 
 
 class Chess:
     pass
 
-
-p = Pawn(Color.BLACK)
-r = Rook(Color.WHITE)
-n = Knight(Color.BLACK)
-b = Bishop(Color.WHITE)
-q = Queen(Color.BLACK)
-k = King(Color.BLACK)
-
 def main():
-    p = Pawn(Color.BLACK)
-    r = Rook(Color.WHITE)
-    n = Knight(Color.BLACK)
-    b = Bishop(Color.WHITE)
-    q = Queen(Color.BLACK)
-    k = King(Color.BLACK)
+    c = ChessBoard()
 
-    print(p.color*1)
 
 if __name__ == "__main__":
     main()
