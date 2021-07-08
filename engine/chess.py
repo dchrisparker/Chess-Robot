@@ -12,6 +12,8 @@ from chessEnum import Color, Column, Type
 
 class Pair:
     """A class representing a coordinate on a chess board."""
+    A = 65
+
     def __init__(self, y: int, x: int):
         """Construct a new Pair.
 
@@ -25,16 +27,16 @@ class Pair:
         self.y = y
         self.x = x
 
-        if x in list(Column):
-            self.row = y
-            self.col = Column(x)
+       
+        self.row = y+1
+        self.col = chr(self.A + x)
 
-            self.rank = self.row
-            self.file = self.col
+        self.rank = self.row
+        self.file = self.col
     
     def getAlgCoords(self) -> str:
         """Return the algebraic version of this coordinate."""
-        return f"{self.col.name.lower()}{self.row+1}"
+        return f"{self.col.name.lower()}{self.row}"
 
     def isNegative(self) -> bool:
         return True if self.x < 0 or self.y < 0 else False
@@ -47,7 +49,7 @@ class Pair:
         return self.getAlgCoords()
     
     def __repr__(self) -> str:
-        return f"{self.y},{self.x}; {self.col.name}{self.row+1}"
+        return f"{self.y},{self.x}; {self.col.name}{self.row}"
 
     def __eq__(self, other) -> bool:
         return self.x == other.x and self.y == other.y
@@ -91,7 +93,7 @@ class Pawn(Piece):
 
     def isValidPath(self, start: Pair, end: Pair) -> Union[bool, Literal['c']]:
         # Color determines direction
-        if start.col == end.col: # Going straight
+        if start.y == end.y: # Going straight
 
             if start.row + (2*self.color) == end.row: # Going 2 forward?
                 if not self.hasMoved: # First move?
@@ -102,7 +104,7 @@ class Pawn(Piece):
                 return True # Always ok
             else: 
                 return False
-        elif ((start.col + 1 == end.col) or (start.col - 1 == end.col)) and (start.row + self.color == end.row): # Capture?
+        elif ((start.y + 1 == end.y) or (start.y - 1 == end.y)) and (start.row + self.color == end.row): # Capture?
             return 'c' # Return c because this move is only valid if it is a capture
         else: # No valid options
             return False
@@ -110,7 +112,7 @@ class Pawn(Piece):
     def getPath(self, start: Pair, end: Pair):
         path: List[Pair] = [] # List of coordinate the piece will move
 
-        if start.col != end.col: # If the pawn is moving diagonally (capture)
+        if start.y != end.y: # If the pawn is moving diagonally (capture)
             path = [end]
         else: # If the pawn is moving straight 
             for i in range(1, abs(start.row-end.row)+1):
