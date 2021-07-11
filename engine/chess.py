@@ -391,6 +391,8 @@ class ChessBoard:
 
     def updateAttackedSquares(self):
         """Update attackedSquaresW and attackedSquaresB to accurately show the squares under attack."""
+        # This whole function seems really inefficient. It'll be fine for now but it feels dumb
+
         def _cullAll():
             """Format data after receiving coordinates from functions."""
             def _cull(list: List[Pair]):
@@ -500,6 +502,9 @@ class ChessBoard:
                 # Ensuring there is a piece on the square
                 if square.piece != None:
                     if square.piece.color == Color.WHITE:
+                        # Using eval to avoid dummy thicc if statement blocks. Will evaluate to something like:
+                        # `_byPiece(square)` where "Piece" is the name of the piece.
+                        #
                         # WARNING: This can be dangerous! It should be fine in this case but this may need to be 
                         # reevaluated in a later program
                         self.attackedSquaresW += eval("_by"+(square.piece.type.name.capitalize())+"(square)")
