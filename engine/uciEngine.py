@@ -372,7 +372,7 @@ class UCIEngine:
         Parameters
         ----------
         logPath : str | PathLike, optional
-            Used to write logs to file for debugging. Leave blank to non write to file, by default ""
+            Used to write logs to file for debugging. Leave blank to not write to file, by default ""
         """
         
         if logPath:
@@ -412,7 +412,7 @@ def main():
 
     eng.dump_in_log()
 
-    eng.close(saveLogs=True, logPath="log.txt")
+    eng.close(logPath="log.txt")
 
 
 
