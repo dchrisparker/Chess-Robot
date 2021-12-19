@@ -59,40 +59,40 @@ class UCIEngine:
         self.reader = NBSR(self.eng.stdout)
         sleep(0.01)
 
-        self.sendCommand("uci") # Telling engine to use uci protocol
+        self.send_command("uci") # Telling engine to use uci protocol
         sleep(0.5)
 
-        if self._readLines()[-1] != "uciok\n":
+        if self._read_lines()[-1] != "uciok\n":
             raise InvalidEngineError(self.path)
             
         # Setting options
         for setting in boolOpts:
-            self.sendCommand(f"setoption name {str(setting)}")
+            self.send_command(f"setoption name {str(setting)}")
 
         for setting in options:
-            self.setOption(setting, options[setting])
+            self.set_option(setting, options[setting])
 
         # Checking if engine is ready
         # NOTE: Required to start searches
-        self.isReady()
+        self.is_ready()
 
         sleep(0.1)
 
-        # self._printLines()
-        self._flushOut()  # Clears stdout
+        # self._print_lines()
+        self._flush_out()  # Clears stdout
 
 
     # Printing info
 
-    def dumpInLog(self) -> None:
+    def dump_in_log(self) -> None:
         """Print log of commands sent."""
         print(self.inLog)
 
-    def dumpOutLog(self) -> None:
+    def dump_out_log(self) -> None:
         """Print log of data received."""
         print(self.outLog)
 
-    def printLines(self, buffer: int=-1) -> None:
+    def print_lines(self, buffer: int=-1) -> None:
         """Print all lines in stdout.
 
         Parameters
@@ -100,7 +100,7 @@ class UCIEngine:
         buffer : int, optional
             The maximum amount of lines to read. If <= 0, will read until end of avaliable data, by default -1
         """
-        lines = self._readLines(buffer)
+        lines = self._read_lines(buffer)
 
         for line in lines:
             print(line, end="")
@@ -108,9 +108,9 @@ class UCIEngine:
 
     # Sending preset commands 
 
-    def newGame(self) -> None:
+    def new_game(self) -> None:
         """Starts new game by sending `ucinewgame` command."""
-        self.sendCommand("ucinewgame")
+        self.send_command("ucinewgame")
 
     def go(self, *args: str, **kwargs: int) -> None:
         """Send `go` command with provided arguments.
@@ -120,7 +120,7 @@ class UCIEngine:
         *args : str
             Valueless arguments.
             Ex. `ponder`
-        *kwargs : int
+        **kwargs : int
             Valued arguments.
             Ex. `depth 10`
         """
@@ -130,24 +130,24 @@ class UCIEngine:
         for item in kwargs:
             command += f"{item} {str(kwargs[item])} "
 
-        self.sendCommand(command)
+        self.send_command(command)
 
     def stop(self) -> None:
         """Stop search by sending `stop` command."""
-        self.sendCommand("stop")
+        self.send_command("stop")
 
-    def isReady(self) -> bool:
+    def is_ready(self) -> bool:
         """Send `isready` command and return a boolean
 
         Returns
         -------
         bool
-            True if 
+            True if `readyok` received
         """
-        self._readLines()
-        self.sendCommand("isready")
+        self._read_lines()
+        self.send_command("isready")
         sleep(0.125)
-        if self._readLine() == "readyok":
+        if self._read_line() == "readyok":
             return True
         else: 
             return False 
@@ -168,13 +168,13 @@ class UCIEngine:
             command += "on"
             self.debugOn = True
 
-        self.sendCommand(command)
+        self.send_command(command)
         return self.debugOn
 
 
     # Sending commands
 
-    def sendCommand(self, command: str, reads: int=0) -> Union[None, List[str]]:
+    def send_command(self, command: str, reads: int=0) -> Union[None, List[str]]:
         """Send a command to the engine.
 
         Parameters
@@ -199,15 +199,15 @@ class UCIEngine:
         if not self.eng.stdin:
             raise BrokenPipeError
         self.eng.stdin.write(f"{command}\n")
-        self._flushIn()
+        self._flush_in()
         self.inLog.append(command)
 
         if reads > 0:
-            return self._readLines(reads)
+            return self._read_lines(reads)
 
         
 
-    def setOption(self, name: str, value: Any) -> None:
+    def set_option(self, name: str, value: Any) -> None:
         """Set option by sending `setoption` command.
 
         Parameters
@@ -219,12 +219,12 @@ class UCIEngine:
             Value of the option.
             Ex. `4`
         """
-        self.sendCommand(f"setoption name {name} value {value}")
+        self.send_command(f"setoption name {name} value {value}")
     
 
     # Sending positions/moves
 
-    def sendMoveSeq(self, moves: Iterable) -> None:
+    def send_move_seq(self, moves: Iterable) -> None:
         """Send a sequence of moves from the starting position.
 
         Parameters
@@ -235,13 +235,13 @@ class UCIEngine:
         """
         movesStr: str
         if type(moves) != str:
-            movesStr = self._moveSeqToString(moves)
+            movesStr = self.move_seq_to_string(moves)
         else:
             movesStr = moves
 
-        self.sendCommand(f"position startpos moves {movesStr}")
+        self.send_command(f"position startpos moves {movesStr}")
 
-    def sendPosMoves(self, position: str, move: str) -> None:
+    def send_pos_moves(self, position: str, move: str) -> None:
         """Send a FEN position and move to engine.
 
         Parameters
@@ -251,12 +251,12 @@ class UCIEngine:
         move : str
             A *single* move.
         """
-        self.sendCommand(f"position fen {position} moves {move}")
+        self.send_command(f"position fen {position} moves {move}")
 
 
     # Reading from engine stdout
 
-    def _readLine(self) -> str:
+    def _read_line(self) -> str:
         """Read one line from the reader.
 
         Returns
@@ -277,7 +277,7 @@ class UCIEngine:
             self.outLog.append(x)
         return x
 
-    def _readLines(self, buffer: int=-1) -> List[str]:
+    def _read_lines(self, buffer: int=-1) -> List[str]:
         """Read until end of stream or end of buffer.
 
         Parameters
@@ -293,16 +293,16 @@ class UCIEngine:
         rtn = []
         
         if buffer <= 0:
-            x = self._readLine()
+            x = self._read_line()
             while x:
                 rtn.append(x)
-                x = self._readLine()
+                x = self._read_line()
         else:
-            x = self._readLine()
+            x = self._read_line()
             i = 0
             while x and i < buffer:
                 rtn.append(x)
-                x = self._readLine()
+                x = self._read_line()
                 i+=1
 
         return rtn
@@ -310,11 +310,11 @@ class UCIEngine:
 
     # Flusing stdout and stdin
 
-    def _flushIn(self) -> None:
+    def _flush_in(self) -> None:
         """Flush engine stdin."""
         self.eng.stdin.flush()
 
-    def _flushOut(self) -> None:
+    def _flush_out(self) -> None:
         """Flush engine stdout."""
         self.eng.stdout.flush()
 
@@ -322,7 +322,7 @@ class UCIEngine:
     # Utility
 
     @staticmethod
-    def _moveSeqToString(seq: Iterable[str]) -> str:
+    def move_seq_to_string(seq: Iterable[str]) -> str:
         """Convert a sequence of moves to a string the engine can use.
 
         Parameters
@@ -339,7 +339,7 @@ class UCIEngine:
         for item in seq:
             rtn += str(item) + " "
 
-    def _writeLogsToFile(self, logPath: Union[str, PathLike]) -> None:
+    def _write_logs_to_file(self, logPath: Union[str, PathLike]) -> None:
         """Write input and output logs to a file.
 
         Parameters
@@ -376,13 +376,13 @@ class UCIEngine:
         """
         
         if logPath:
-            self._writeLogsToFile(logPath)
+            self._write_logs_to_file(logPath)
 
         self.__del__()
 
     def __del__(self) -> None:
         """Stop the engine fully and kill process"""
-        self.sendCommand("quit")
+        self.send_command("quit")
         self.eng.kill()
 
 
@@ -395,22 +395,22 @@ class Stockfish(UCIEngine):
     UCIEngine
         The UCIEngine class
     """
-    def displayBoard(self) -> None:
+    def display_board(self) -> None:
         """Display the board using the `d` Stockfish command."""
-        self.sendCommand("d")
+        self.send_command("d")
         sleep(0.1)
-        self.printLines()
+        self.print_lines()
 
 
 
 def main():
     """UCIEngine & Stockfish tester"""
     eng = Stockfish("stockfish_13.exe", "UCI_LimitStrength", UCI_Elo = 1880, Threads = 4, Hash = 1024)
-    eng.newGame()
+    eng.new_game()
 
-    eng.displayBoard()
+    eng.display_board()
 
-    eng.dumpInLog()
+    eng.dump_in_log()
 
     eng.close(saveLogs=True, logPath="log.txt")
 
