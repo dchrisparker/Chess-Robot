@@ -1,12 +1,13 @@
+from __future__ import annotations
+
 # By Chris Parker
 
 from abc import ABC, abstractmethod
+
 from exceptions import InvalidFENError
-from functools import cache
-from typing import *
-
-
 from chessEnum import Color, Column, Type
+
+from typing import List, Literal, Union, Tuple
 
 
 class Pair:
@@ -50,7 +51,7 @@ class Pair:
     def __repr__(self) -> str:
         return f"{self.y},{self.x}; {self.col}{self.row}"
 
-    def __eq__(self, other) -> bool:
+    def __eq__(self, other: Pair) -> bool:
         return self.x == other.x and self.y == other.y
     
     def __bool__(self) -> bool:
@@ -65,6 +66,10 @@ class Piece(ABC):
         self.color = color
         self.type = type
         self.has_moved = False
+
+    def __eq__(self, __o: Piece) -> bool:
+        if __o:
+            return self.color == __o.color and self.type == __o.type
 
     def __str__(self) -> str:
         return f"{self.color.name} {self.type.name}"
@@ -88,7 +93,6 @@ class Piece(ABC):
 class Pawn(Piece):
     def __init__(self, color: Color) -> None:
         super().__init__(color, Type.PAWN)
-        self.has_moved = False
 
     def is_valid_path(self, start: Pair, end: Pair) -> Union[bool, Literal['c']]:
         # Color determines direction
@@ -126,7 +130,6 @@ class Pawn(Piece):
 class Rook(Piece):
     def __init__(self, color: Color):
         super().__init__(color, Type.ROOK)
-        self.has_moved = False
 
     def is_valid_path(self, start: Pair, end: Pair):
         h = start.x == end.x
@@ -276,7 +279,7 @@ class Square:
             return str(self.piece)
 
         def __repr__(self) -> str:
-            return self.__str__() + f"({self.coords.row},{self.coords.col})"
+            return self.__str__() + f" ({self.coords.get_alg_coords()})"
 
 class ChessBoard: 
 
@@ -292,7 +295,7 @@ class ChessBoard:
     bq, bk, bp = Queen(Color.BLACK), King(Color.BLACK), Pawn(Color.BLACK)
     
     # Origin (A1) is at 0,0 (top-left)
-    DEFAULT_BOARD = tuple(tuple(Square(Pair(y, x), None) for y in range(8)) for x in range(8)) # Blank board
+    DEFAULT_BOARD = tuple(tuple(Square(Pair(y, x), None) for x in range(8)) for y in range(8)) # Blank board
     DEFAULT_FEN = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR" # FEN for default placement
     
     # CONSTRUCTOR
@@ -522,7 +525,7 @@ class ChessBoard:
     def get_square(self, squarePos: Pair) -> Square:
         return self.board[squarePos.y][squarePos.x]
 
-    def getKingPosition(self, color: Color) -> Pair:
+    def get_king_position(self, color: Color) -> Pair:
         for rank in range(len(self.board)):
             for file in range(len(self.board[rank])):
                 square = self.get_square(Pair(rank, file))
@@ -608,7 +611,7 @@ class ChessBoard:
                 except AttributeError:
                     raise InvalidFENError(FEN)
 
-                self.set_square(Pair(rank, file), piece)
+                self.set_square(Pair(rank, file), piece.clone())
                 file += 1
             elif l.isnumeric():
                 for f in range(file, file+int(l)):
@@ -647,11 +650,76 @@ class Chess:
         self.board = ChessBoard()
         self.white_cap: List[Piece] = [] # Captured white pieces
         self.black_cap: List[Piece] = [] # Captured black pieces
-        self.en_pass: List[Square] = [] # List for storing en passant squares
+        self.en_pass: Square = None # En passant sign
+        self.white_turn = True # Keep track of the turn
+    
+    def castle_options(self) -> str:
+        """Generate string that contains castling options.
+
+        Returns
+        -------
+        str
+            String in the form `KQkq` or `-`
+        """
+        option_string = "" 
+        
+        A1 = self.get_piece(Pair(0,0))
+        H1 = self.get_piece(Pair(0,7))
+        A8 = self.get_piece(Pair(7,0))
+        H8 = self.get_piece(Pair(7,7))
+        w_king = self.get_piece(Pair(0,4))
+        b_king = self.get_piece(Pair(7,4))
+        
+        if w_king and not w_king.has_moved:
+            if A1 and not A1.has_moved:
+                option_string += "K"
+            if H1 and not H1.has_moved:
+                option_string += "Q"
+                
+        if b_king and not b_king.has_moved:
+            if H8 and not H8.has_moved:
+                option_string += "k"
+            if A8 and not A8.has_moved:
+                option_string += "q"
+
+        return option_string if bool(option_string) else "-"
+        
+    def get_piece(self, pos: Pair) -> Piece:
+        """Get piece at postion.
+
+        Parameters
+        ----------
+        pos : Pair
+            Postion of piece (row, column)
+
+        Returns
+        -------
+        Piece
+            Piece at given position
+        """
+        return self.board.get_square(pos).piece
+    
+    @staticmethod
+    def int_alg(string: str) -> Pair:
+        return Pair(int(string[1])-1, Column[string[0]])
+        
     
 def main():
-    c = ChessBoard()
-    print(c)
+    c = Chess()
+    print(c.board.__repr__())
+    print(c.castle_options())
+    c.board.move(Chess.int_alg("A2"), Chess.int_alg("A3"))
+    c.board.move(Chess.int_alg("A1"), Chess.int_alg("A2"))
+    print(c.board.__repr__())
+    print(c.castle_options())
+    
+    for row in range(8):
+        for col in range(8):
+            piece = c.get_piece(Pair(row, col))
+            if piece:
+                print(f"{piece} at ({row},{col}) has moved: {piece.has_moved}")
+    
+    
 
 
 if __name__ == "__main__":
