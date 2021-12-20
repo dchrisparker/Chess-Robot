@@ -1,14 +1,17 @@
-from __future__ import annotations
-
 # By Chris Parker
+# Typing imports
+from __future__ import annotations
+from typing import List, Literal, Tuple
 
+# Class imports
 from abc import ABC, abstractmethod
 
+# Chess Imports
 from exceptions import InvalidFENError
-from chessEnum import Color, Column, Type
+from chess_enum import Color, Column, Type
 
-from typing import List, Literal, Union, Tuple
-
+# Testing/Debug
+from time import perf_counter
 
 class Pair:
     """A class representing a coordinate on a chess board."""
@@ -70,6 +73,8 @@ class Piece(ABC):
     def __eq__(self, __o: Piece) -> bool:
         if __o:
             return self.color == __o.color and self.type == __o.type
+        else:
+            return False
 
     def __str__(self) -> str:
         return f"{self.color.name} {self.type.name}"
@@ -78,7 +83,7 @@ class Piece(ABC):
         return self.__str__()
 
     @abstractmethod
-    def is_valid_path(self, start: Pair, end: Pair) -> Union[bool, Literal['c']]:
+    def is_valid_path(self, start: Pair, end: Pair) -> bool | Literal['c']:
         pass
 
     @abstractmethod
@@ -94,7 +99,7 @@ class Pawn(Piece):
     def __init__(self, color: Color) -> None:
         super().__init__(color, Type.PAWN)
 
-    def is_valid_path(self, start: Pair, end: Pair) -> Union[bool, Literal['c']]:
+    def is_valid_path(self, start: Pair, end: Pair) -> bool | Literal['c']:
         # Color determines direction
         if start.y == end.y: # Going straight
 
@@ -271,7 +276,7 @@ class King(Piece):
         return King(self.color)
 
 class Square:
-        def __init__(self, coordinates: Pair, piece: Union[Piece, None]) -> None:
+        def __init__(self, coordinates: Pair, piece: Piece | None) -> None:
             self.coords = coordinates
             self.piece = piece
         
@@ -302,13 +307,13 @@ class ChessBoard:
     def __init__(self) -> None:
         self.attacked_squares_w: List[Pair] = [] # Squares attacked by white
         self.attacked_squares_b: List[Pair] = [] # Squares attacked by black
-        self.board: tuple[tuple[Square]] = list(self.DEFAULT_BOARD)
+        self.board: List[List[Square]] = list(self.DEFAULT_BOARD)
         
         self.reset_board()
         self.update_attacked_squares()
 
     # MOVEMENT METHODS
-    def can_move(self, frm: Pair, to: Pair, *pseudoCap: Pair) -> Tuple[bool, Union[Literal['c'], None]]:
+    def can_move(self, frm: Pair, to: Pair, *pseudoCap: Pair) -> Tuple[bool, Literal['c']| None]:
         """Check if a piece can move using its own methods and checking the path it would take.
 
         Parameters
@@ -332,7 +337,7 @@ class ChessBoard:
         valid = sSquare.piece.is_valid_path(frm, to)
 
         if (sSquare.piece == None) or (not valid) or (valid == 'c' and fSquare.piece == None):
-            print(sSquare.piece, valid, fSquare.piece)
+            # print(sSquare.piece, valid, fSquare.piece)
             return False, None
 
         if fSquare.piece != None and sSquare.piece.color == fSquare.piece.color:
@@ -353,7 +358,7 @@ class ChessBoard:
 
         return True, ('c' if fSquare.piece != None else None)
 
-    def move(self, frm: Pair, to: Pair) -> Union[Piece, None]:
+    def move(self, frm: Pair, to: Pair) -> Piece | None:
         """Move a piece from start square to end square.
 
         Parameters
@@ -377,14 +382,6 @@ class ChessBoard:
         cSquare.piece = None
 
         return cap
-
-    def safe_move(self, frm: Pair, to: Pair, *pseudoCap: Pair) -> Tuple[bool, Union[None, Piece]]:
-        can = self.can_move()
-        cap = None
-        if can:
-            cap = self.move(frm, to)
-            
-        return can, cap
 
     # MODIFIER METHODS
     def set_square(self, sqr: Pair, piece: Piece) -> None:
@@ -627,9 +624,45 @@ class ChessBoard:
 
             if l == ' ': # Must be the end of position section
                 break    # Other sections can be disguarded
+            
+        # Now check that any moved pieces have movement indicated in piece attributes
+        compare_FEN = self.__expand_FEN(FEN.split(" ")[0]).split("/")
+        compare_def = self.__expand_FEN(self.DEFAULT_FEN).split("/")
+
+        assert len(compare_FEN) == len(compare_def)
+        
+        for row_i, (board_row, def_row) in enumerate(zip(reversed(compare_FEN), reversed(compare_def))):
+            assert len(board_row) == len(def_row)
+            for col_i, (board_char, def_char) in enumerate(zip(board_row, def_row)):
+                if board_char != def_char:
+                    if board_char != "#":
+                        self.board[row_i][col_i].piece.has_moved = True
 
         self.update_attacked_squares()
             
+    @staticmethod
+    def __expand_FEN(FEN: str) -> str:
+        """Fill in blanks (indicated by numbers) with `#` to normalize length.
+
+        Parameters
+        ----------
+        FEN : str
+            FEN string to expand
+
+        Returns
+        -------
+        str
+            Expanded FEN string
+        """
+        new_FEN = []
+        for char in FEN:
+            if char.isalpha() or char == "/":
+                new_FEN.append(char)
+            elif char.isnumeric():
+                for i in range(int(char)):
+                    new_FEN.append("#")
+                    
+        return "".join(new_FEN)
 
     # SPECIAL METHODS
     def __str__(self) -> str:
@@ -642,7 +675,6 @@ class ChessBoard:
 
         return rtn
 
-
 class Chess:
     """Play a game of chess."""
 
@@ -650,8 +682,64 @@ class Chess:
         self.board = ChessBoard()
         self.white_cap: List[Piece] = [] # Captured white pieces
         self.black_cap: List[Piece] = [] # Captured black pieces
-        self.en_pass: Square = None # En passant sign
-        self.white_turn = True # Keep track of the turn
+        self.en_pass: Square = None # En passant square
+        self.white_turn = True # Who's turn
+        self.half_move = 0 
+        self.full_move = 1
+        self.move_list: List[str] = [] # List of strings in form `e2e4` w/o piece symbols
+        
+        self.white_legal: List[str] = [] # Legal moves for white
+        self.black_legal: List[str] = [] # Legal moves for black
+        
+        self.winner: None | Color = None
+    
+    def check_for_winner(self) -> None:
+        pass
+    
+    def all_legal_moves(self) -> None:
+        pass
+    
+    def move(self, frm: Pair, to: Pair) -> bool:
+        """Move piece from a square to another if that move is valid. 
+        NOTE: Automatically captures pieces.
+
+        Parameters
+        ----------
+        frm : Pair
+            Start position
+        to : Pair
+            End position
+
+        Returns
+        -------
+        bool
+            True if movement was successful, False otherwise
+        """
+        start = self.board.get_square(frm)
+        cap = None
+        
+        if self.board.can_move(frm, to, self.en_pass) and (bool(start.piece.color) == self.white_turn):
+            cap = self.board.move(frm, to)
+            
+            if cap:
+                if self.white_turn:
+                    self.black_cap.append(cap)
+                else:
+                    self.white_cap.append(cap)
+                    
+        else:
+            return False
+        
+        # Increment move counters after successful move
+        if not self.white_turn:
+            self.full_move += 1
+            
+        if not cap and start.piece.type != Type.PAWN:
+            self.half_move += 1
+        else:
+            self.half_move = 0
+        
+        return True
     
     def castle_options(self) -> str:
         """Generate string that contains castling options.
@@ -672,9 +760,9 @@ class Chess:
         
         if w_king and not w_king.has_moved:
             if A1 and not A1.has_moved:
-                option_string += "K"
-            if H1 and not H1.has_moved:
                 option_string += "Q"
+            if H1 and not H1.has_moved:
+                option_string += "K"
                 
         if b_king and not b_king.has_moved:
             if H8 and not H8.has_moved:
@@ -699,8 +787,129 @@ class Chess:
         """
         return self.board.get_square(pos).piece
     
+    def get_FEN(self) -> str:
+        """Return the FEN version of the current game.
+
+        Returns
+        -------
+        str
+            Full FEN string
+        """
+        FEN_string = [self.board.FEN_piece_placement(), "w" if self.white_turn else "b", self.castle_options(), 
+                      self.en_pass.coords.get_alg_coords() if self.en_pass else "-", str(self.half_move), 
+                      str(self.full_move)]
+        
+        return " ".join(FEN_string)
+    
+    def set_FEN(self, FEN: str):
+        """Set the game state using a FEN string.
+
+        Parameters
+        ----------
+        FEN : str
+            FEN String
+
+        Raises
+        ------
+        InvalidFENError
+            If the FEN string is improperly formatted or has conflicting information
+        """
+        # Function variables 
+        castle_err = "Castle options do not match position."
+        A1 = self.get_piece(Pair(0,0))
+        H1 = self.get_piece(Pair(0,7))
+        A8 = self.get_piece(Pair(7,0))
+        H8 = self.get_piece(Pair(7,7))
+        w_king = self.get_piece(Pair(0,4))
+        b_king = self.get_piece(Pair(7,4))
+        
+        # Split the string into sections
+        sects = FEN.split()
+        
+        # Ensure there are no more or less than 6 sections
+        if len(sects) != 6:
+            raise InvalidFENError(FEN)
+        
+        # Set the position
+        # NOTE: No need to raise exception here, FEN_set_postion function will do it
+        self.board.FEN_set_postion(sects[0])
+        
+        # Set the current turn
+        # NOTE: No exception here. This is a simple error we can deal with
+        self.white_turn = True if sects[1].lower() == "w" else False
+        
+        # Castle options
+        if len(sects[2]) > 4: # There shouldn't be more than 4 castling options
+            raise InvalidFENError(FEN)
+        
+        # Check every option and ensure there is no conflicting info w/ position
+        for char in sects[2]:
+            if char == "K":
+                if H1 != self.board.wr:
+                    raise InvalidFENError(FEN, castle_err)
+                    
+            if char == "Q":
+                if A1 != self.board.wr:
+                    raise InvalidFENError(FEN, castle_err)
+                
+            if (char == "K" or char == "Q"):
+                if w_king != self.board.wk:
+                    raise InvalidFENError(FEN, castle_err)
+            
+            if char == "k":
+                if H8 != self.board.br:
+                    raise InvalidFENError(FEN, castle_err)
+            
+            if char == "q":
+                if A8 != self.board.br:
+                    raise InvalidFENError(FEN, castle_err)
+            
+            if char == "k" or char == "q":
+                if b_king != self.board.bk:
+                    raise InvalidFENError(FEN, castle_err)
+                
+        # Changing the has_moved variable for castling pieces
+        if "K" not in sects[2] and H1 == self.board.wr:
+            H1.has_moved = True
+        if "Q" not in sects[2] and A1 == self.board.wr:
+            A1.has_moved = True
+        if "k" not in sects[2] and H8 == self.board.br:
+            H8.has_moved = True
+        if "q" not in sects[2] and A8 == self.board.br:
+            A8.has_moved = True
+            
+        # En passant square
+        if sects[3] != "-":
+            self.en_pass = sects[3]
+        else:
+            self.en_pass = None
+            
+        # Halfmove clock
+        if not sects[4].isdigit():
+            raise InvalidFENError(FEN, "Invalid halfmove clock.")
+        
+        self.half_move = int(sects[4])
+        
+        # Fullmove clock
+        if not sects[5].isdigit():
+            raise InvalidFENError(FEN, "Invalid fullmove clock.")
+        
+        self.full_move = int(sects[5]) 
+                
     @staticmethod
-    def int_alg(string: str) -> Pair:
+    def alg_to_pair(string: str) -> Pair:
+        """Convert pieceless algebraic coordinates into Pair.
+
+        Parameters
+        ----------
+        string : str
+            Algebraic coordinate
+
+        Returns
+        -------
+        Pair
+            Pair representation
+        """
         return Pair(int(string[1])-1, Column[string[0]])
         
     
@@ -708,19 +917,22 @@ def main():
     c = Chess()
     print(c.board.__repr__())
     print(c.castle_options())
-    c.board.move(Chess.int_alg("A2"), Chess.int_alg("A3"))
-    c.board.move(Chess.int_alg("A1"), Chess.int_alg("A2"))
-    print(c.board.__repr__())
-    print(c.castle_options())
+    # c.board.move(Chess.alg_to_pair("h7"), Chess.alg_to_pair("h6"))
+    # c.board.move(Chess.alg_to_pair("h8"), Chess.alg_to_pair("h7"))
+    # print(c.board.__repr__())
+    # print(c.castle_options())
     
+    c.set_FEN("r1bq1bnr/p2kp1pp/1pn2p2/2pp4/1P2P1P1/P1PP4/R3BP1P/1NBQK1NR b K - 0 1")
+    
+    # Show every piece and whether or not it has moved
     for row in range(8):
         for col in range(8):
             piece = c.get_piece(Pair(row, col))
             if piece:
-                print(f"{piece} at ({row},{col}) has moved: {piece.has_moved}")
+                print(f"{piece} at {Pair(row, col).get_alg_coords()} has moved: {piece.has_moved}")
+                
+    print(c.get_FEN())
     
-    
-
 
 if __name__ == "__main__":
     main()
