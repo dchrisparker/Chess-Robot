@@ -2,7 +2,7 @@ from enum import Enum, auto, IntEnum
 
 class Color(IntEnum):
         WHITE = 1
-        BLACK = 0
+        BLACK = -1
 
 class Type(Enum):
     PAWN, ROOK, KNIGHT, BISHOP, QUEEN, KING = 'P', 'R', 'N', 'B', 'Q', 'K'
