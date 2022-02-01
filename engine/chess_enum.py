@@ -10,3 +10,9 @@ class Type(Enum):
 class Column(IntEnum):
     A, B, C, D, E, F, G, H = tuple(range(0,8))
     a, b, c, d, e, f, g, h = tuple(range(0,8))
+    
+class GameState(Enum):
+    RUNNING = "Running"
+    WHITE_WIN = W_WIN = "White Wins"
+    BLACK_WIN = B_WIN = "Black Wins"
+    DRAW = "Draw"
