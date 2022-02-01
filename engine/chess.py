@@ -8,7 +8,7 @@ from abc import ABC, abstractmethod
 
 # Chess Imports
 from exceptions import InvalidFENError
-from chess_enum import Color, Column, Type
+from chess_enum import Color, Column, Type, GameState
 
 # Testing/Debug
 from time import perf_counter
@@ -61,8 +61,6 @@ class Pair:
         return bool(self.x) or bool(self.y) # Only returns false if both are 0 or None
 
         
-        
-
 class Piece(ABC):
     """An abstract class representing a chess piece."""
     def __init__(self, color: Color, type: Type) -> None:
@@ -782,7 +780,7 @@ class Chess:
         self.white_legal: list[str] = [] # Legal moves for white
         self.black_legal: list[str] = [] # Legal moves for black
         
-        self.winner: None | Color = None
+        self.game_state: str = GameState.RUNNING
     
     def in_check(self, side: Color) -> bool:
         """Find if the king of color `side` is in check.
@@ -808,6 +806,18 @@ class Chess:
         return False # No if statements were true, return False
             
     def in_checkmate(self, side: Color) -> bool:
+        """Find if the kind of color `side` is in checkmate.
+
+        Parameters
+        ----------
+        side : Color
+            Color of king
+
+        Returns
+        -------
+        bool
+            True if in checkmate (i.e. the king is in a square attacked by other side and there are no legal moves)
+        """ 
         king = self.board.get_king_position(side)
         
         if self.in_check(side):
@@ -817,6 +827,18 @@ class Chess:
             return False
     
     def legal_moves(self, pair: Pair) -> list[Pair]:
+        """Find every legal move for the given piece.
+
+        Parameters
+        ----------
+        pair : Pair
+            Square the piece is on
+
+        Returns
+        -------
+        list[Pair]
+            A list of legal moves
+        """
         piece = self.board.get_square(pair).piece
         legal: list[Pair] = []
         
@@ -830,7 +852,19 @@ class Chess:
         return legal
     
     def all_legal_moves(self, side: Color) -> list[tuple[Pair, list[Pair]]]:
-        legal: list[tuple[Pair, Pair]] = [] # List of to-from
+        """Find the legal moves for every piece on the board of a given color.
+
+        Parameters
+        ----------
+        side : Color
+            Color to check
+
+        Returns
+        -------
+        list[tuple[Pair, list[Pair]]]
+            A list of (Piece, Move(s)) tuples
+        """
+        legal: list[tuple[Pair, Pair]] = [] # List of from-to
         
         for row in range(8):
             for col in range(8):
@@ -862,7 +896,7 @@ class Chess:
         cap = None
         
         if (self.board.can_move(frm, to, self.en_pass) 
-            and ((True if start.piece.color == Color.WHITE else False) == self.white_turn)
+            and ((start.piece.color == Color.WHITE) == self.white_turn)
             ):
             cap = self.board.move(frm, to)
             
@@ -894,9 +928,60 @@ class Chess:
             self.half_move += 1
         else:
             self.half_move = 0
+            
+        self.white_turn = not self.white_turn
         
         return True
     
+    def castle(self, frm: Pair, to: Pair) -> bool:
+        king = self.get_piece(frm)
+        rook = self.get_piece(to)
+        
+        # Acting in turn?
+        if (king.color == Color.WHITE) != self.white_turn:
+            return False
+        
+        # Make sure the pieces are a king and a rook
+        if not (king.type == Type.KING and rook.type == Type.ROOK):
+            return False
+
+        # Check if that castling option is valid
+        castle_str = self.castle_options()
+        if to == alg_to_pair("a1") and "Q" not in castle_str:
+            return False
+        if to == alg_to_pair("h1") and "K" not in castle_str:
+            return False
+        if to == alg_to_pair("a8") and "q" not in castle_str:
+            return False
+        if to == alg_to_pair("h8") and "k" not in castle_str:
+            return False
+        
+        # Check if the path is clear
+        c_col = frm.x + 1
+        while c_col < 7:
+            if self.board.get_square(Pair(frm.y, c_col)).piece:
+                return False
+            c_col += 1
+            
+        c_col = frm.x - 1
+        while c_col > 0:
+            if self.board.get_square(Pair(frm.y, c_col)).piece:
+                return False
+            c_col -= 1
+            
+        # Move the king and rook
+        if frm.x < to.x:
+            self.board.move(frm, Pair(to.y, frm.x + 2))
+            self.board.move(to, Pair(to.y, frm.x + 1))
+        else:
+            self.board.move(frm, Pair(to.y, frm.x - 2))
+            self.board.move(to, Pair(to.y, frm.x - 1))
+            
+        self.white_turn = not self.white_turn
+            
+        return True
+        
+        
     def castle_options(self) -> str:
         """Generate string that contains castling options.
 
@@ -1097,7 +1182,7 @@ def main():
     # print(c.board.__repr__())
     # print(c.castle_options())
     
-    # c.set_FEN("r1bq1bnr/p2kp1pp/1pn2p2/2pp4/1P2P1P1/P1PP4/R3BP1P/1NBQK1NR b K - 0 1")
+    c.set_FEN("r3k2r/pppppppp/8/8/8/8/PPPPPPPP/R3K2R w KQkq - 0 1")
     
     # Show every piece and whether or not it has moved
     for row in range(8):
@@ -1107,6 +1192,11 @@ def main():
                 print(f"{piece} at {Pair(row, col).get_alg_coords()} has moved: {piece.has_moved}")
     
     print(__formatted_legal_moves(c, Color.BLACK))
+    
+    print(c.castle(alg_to_pair("e1"), alg_to_pair("a1")))
+    print(c.castle(alg_to_pair("e8"), alg_to_pair("h8")))
+    
+    print(c.__repr__())
     
 
 if __name__ == "__main__":
