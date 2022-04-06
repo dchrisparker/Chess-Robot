@@ -8,7 +8,7 @@ from subprocess import PIPE, STDOUT, Popen
 from time import sleep
 
 # Type hinting
-from typing import Any, Iterable, List, Optional, Tuple, Union
+from typing import Any, Iterable, List, Union
 from os import PathLike
 
 # Reader
