@@ -974,19 +974,20 @@ class Chess:
             if self.board.in_board(end):
                 left = end.x == pair.x - 1
                 right = end.x == pair.x + 1
-                up = end.x == pair.y + 1
+                up = end.y == pair.y + 1
                 down = end.y == pair.y - 1
                 if left or right or up or down:
                     nxt, can = self.next_move(pair, end)
                     if can and not nxt.in_check(piece.color):
                         legal.append(end)
-                        remove.append(end)
 
                         # Don't change value if it's True
                         left_safe = left or left_safe
                         right_safe = right or right_safe
                         up_safe = up or up_safe
                         down_safe = down or down_safe
+                    else:
+                        remove.append(end)
             else:
                 remove.append(end)
                     
@@ -997,7 +998,7 @@ class Chess:
             if self.board.in_board(end):
                 left = end.x < pair.x
                 right = end.x > pair.x
-                up = end.x > pair.y
+                up = end.y > pair.y
                 down = end.y < pair.y
                 if left and left_safe or right and right_safe or up and up_safe or down and down_safe:
                     if self.board.can_move(pair, end, self.en_pass)[0]:
@@ -1452,7 +1453,7 @@ def alg_to_pair(string: str) -> Pair:
     Pair
         Pair representation
     """
-    return Pair(int(string[1])-1, Column[string[0]])
+    return Pair(int(string[1])-1, Column[string[0]].value)
 
 def in2D(data: Any, lst: list[list[Any]]) -> bool:
     for row in lst:
