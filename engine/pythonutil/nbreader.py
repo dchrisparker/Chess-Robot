@@ -13,7 +13,7 @@ class NonBlockingStreamReader:
         stream: the stream to read from.
                 Usually a process' stdout or stderr.
         '''
-
+        self._cont = True
         self._s = stream
         self._q = Queue()
 
@@ -22,16 +22,16 @@ class NonBlockingStreamReader:
             Collect lines from 'stream' and put them in 'queue'.
             '''
 
-            while True:
+            while self._cont:
                 line = stream.readline()
                 if line:
                     queue.put(line)
                 else:
-                    raise UnexpectedEndOfStream
+                    if self._cont:
+                        raise UnexpectedEndOfStream
 
         self._t = Thread(target = _populateQueue,
                 args = (self._s, self._q))
-        self._t.daemon = True
         self._t.start() #start collecting lines from the stream
 
     def readline(self, timeout = None):
@@ -40,5 +40,8 @@ class NonBlockingStreamReader:
                     timeout = timeout)
         except Empty:
             return None
+    
+    def __del__(self) -> None:
+        self._cont = False
 
 class UnexpectedEndOfStream(Exception): pass
