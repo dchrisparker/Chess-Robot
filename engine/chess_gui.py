@@ -3,12 +3,12 @@
 from time import perf_counter, sleep
 import threading
 
-from chess import Pair, Piece, ChessBoard, Chess
+from chess import Pair, Piece, ChessBoard, Chess, alg_to_pair
 from chess_enum import Type
 from uciEngine import Stockfish
 
 import pygame
-from pygame.locals import *
+from pygame.locals import (SRCALPHA, KEYDOWN, K_x, QUIT)
     
 """CONSTANTS"""    
 # Define constants for the screen width and height
@@ -28,7 +28,20 @@ RED = 0xff0000
 SQR_WHITE = 0xf0d9b5
 SQR_BLACK = 0xb58863
 
-START_STATE = "r3k2r/8/8/8/8/8/8/R3K2R w KQkq - 0 1"
+START_STATE = None #"r3k2r/8/8/8/8/8/8/R3K2R w KQkq - 0 1"
+
+# Engine vars
+ENGINE_WHITE = False # If the engine is playing white pieces
+DEBUG = True
+ENGINE_PATH = "stockfish_13.exe"
+ENGINE_ARGS = ("UCI_LimitStrength",)
+ENGINE_KWARGS = {"UCI_Elo" : 200, 
+                 "Threads" : 4, 
+                 "Hash" : 1024
+                }
+MAX_TIME = 1000 # ms
+
+LOG = (True, "log.txt")
 
 """HELPER FUNCTIONS"""
 def average_rgb(c1: tuple[int, int, int], c2: tuple[int, int, int]) -> tuple[int, int, int]: 
@@ -157,6 +170,9 @@ class CircleMarker(pygame.sprite.Sprite):
   
 class GameLoop:
     def __init__(self):
+        # Initialize engine, needs more time than PyGame
+        self.engine = Stockfish(ENGINE_PATH, *ENGINE_ARGS, **ENGINE_KWARGS)
+        
         # Initialize pygame
         pygame.init()
 
@@ -176,10 +192,12 @@ class GameLoop:
         self.black_list: list[GPiece] = list()
         self.pieces: pygame.sprite.LayeredUpdates = None
         
+        # Set the pieces
         if START_STATE:
             self.game.set_FEN(START_STATE)
         self.draw_pieces()            
 
+        # All the move markers
         self.possible_move_list: list[CircleMarker] = list()
         for row in range(8):
             for col in range(8):
@@ -208,12 +226,17 @@ class GameLoop:
         # for row in self.board.centers:
         #     print(row)
         # Debug
-        self.marker = CircleMarker((self.board.square_len / 2) * 0.5, (225, 0, 0, 155))
+        # self.marker = CircleMarker((self.board.square_len / 2) * 0.5, (225, 0, 0, 155))
         
     def start(self):
+        self.engine.new_game()
+        
         # Main loop
         while self.running:
             self.clock.tick(FPS)
+            if ENGINE_WHITE == self.game.white_turn:
+                self.engine_turn()
+                
             # for loop through the event queue
             for event in pygame.event.get():
                 # Check for KEYDOWN event
@@ -243,8 +266,10 @@ class GameLoop:
                     self.drag_piece(event)
                 # Check for QUIT event. If QUIT, then set running to false.
                 elif event.type == QUIT:
+                    if LOG[0]:
+                        self.engine.close(LOG[1])
                     self.running = False 
-
+            
             # Get all the keys currently pressed
             pressed_keys = pygame.key.get_pressed()
             
@@ -362,30 +387,52 @@ class GameLoop:
             self.dragged_piece.rect.x = mouse_x + self.offset_x
             self.dragged_piece.rect.y = mouse_y + self.offset_y
             
+    """ENGINE FUNCTIONS"""
+            
     def move_piece(self, frm: tuple[int, int], to: tuple[int, int]):
-        frm = std_to_pair(frm)
-        to = std_to_pair(to)
+        frm_pair = std_to_pair(frm)
+        to_pair = std_to_pair(to)
         
-        print(frm, to)
-        move = self.game.move(frm, to)
+        print(frm_pair, to_pair)
+        move = self.game.move(frm_pair, to_pair)
         if move:
             print(move)
-            s = self.get_sprites_at(frm)
-            if len(s) > 1:
-                self.pieces.remove(s[0])
-            else:
-                if self.game.en_pass_capture:
-                    to_std = pair_to_std(self.game.en_pass_capture)
-                    spt = self.get_sprites_at(to_std)
-                    self.pieces.remove(spt)
-                    
-            self.pieces.remove(self.get_sprites_at(to))
+            to_pos = self.board_to_main(self.board.get_center(to))
+            s = self.get_sprites_at(to)
+            piece = self.get_sprites_at(frm)[0]
+            
+            self.pieces.remove(s)
+            
+            piece.rect.center = to_pos
             
             # Error or castling
-            if self.game.get_piece(to) == None:
+            if self.game.get_piece(to_pair) == None:
                 self.draw_pieces()
+                print("REDRAW")
         else:
             print(move)
+            
+    def engine_turn(self) -> None:
+        self.__send_pos()
+        self.__start_search(MAX_TIME)
+        sleep(MAX_TIME / 1000 + 0.01)
+        self.engine.send_command("stop")
+        sleep(0.001)
+        self.engine._read_lines()
+        move_str = self.engine.outLog[-1].split()
+        if move_str[0] == "bestmove":
+            start = pair_to_std(alg_to_pair(move_str[1][0:2]))
+            end = pair_to_std(alg_to_pair(move_str[1][2:4]))
+            self.move_piece(start, end)
+        else:
+            print(move_str[0])
+            print("INVALID MOVE")
+            
+    def __send_pos(self) -> None:
+        self.engine.send_command("position fen " + self.game.get_FEN())
+        
+    def __start_search(self, time: int) -> None:
+        self.engine.go(movetime = time)
         
     def get_sprites_at(self, square: tuple[int, int]) -> list[pygame.sprite.Sprite]:
         return self.pieces.get_sprites_at(self.board_to_main(self.board.get_center(square)))
@@ -419,10 +466,15 @@ class GameLoop:
         
     def start_game_state_thread(self):
         threading.Thread(target=self._check_checkmate_stale, daemon=True).start()
+        
 
 def main():
-    game = GameLoop()
-    game.start()
+    cont = True
+    while cont:
+        game = GameLoop()
+        cont = game.start()
+        game = None
+        sleep(0.1)
 
 
 if __name__ == "__main__":
