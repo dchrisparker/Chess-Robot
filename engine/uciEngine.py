@@ -8,7 +8,7 @@ from subprocess import PIPE, STDOUT, Popen
 from time import sleep
 
 # Type hinting
-from typing import Any, Iterable, List, Union
+from typing import Any, Iterable
 from os import PathLike
 
 # Reader
@@ -25,7 +25,7 @@ class UCIEngine:
     BrokenPipeError
         If there are problems with the programs stdin or stdout
     """
-    def __init__(self, enginePath: Union[str, PathLike], *boolOpts: str, **options: Union[str, int]):
+    def __init__(self, enginePath: str | PathLike, *boolOpts: str, **options: str | int):
         """Construct new `UCIEngine`.
 
         Parameters
@@ -47,8 +47,8 @@ class UCIEngine:
         """
 
         self.path = enginePath
-        self.inLog = []
-        self.outLog = []
+        self.inLog: list[str] = []
+        self.outLog: list[str] = []
         self.debugOn = False
 
         # Starting engine
@@ -74,9 +74,9 @@ class UCIEngine:
 
         # Checking if engine is ready
         # NOTE: Required to start searches
-        self.is_ready()
+        while (not self.is_ready()): pass
 
-        sleep(0.1)
+        sleep(0.01)
 
         # self._print_lines()
         self._flush_out()  # Clears stdout
@@ -146,8 +146,8 @@ class UCIEngine:
         """
         self._read_lines()
         self.send_command("isready")
-        sleep(0.125)
-        if self._read_line() == "readyok":
+        sleep(0.01)
+        if self._read_line() == "readyok\n":
             return True
         else: 
             return False 
@@ -174,7 +174,7 @@ class UCIEngine:
 
     # Sending commands
 
-    def send_command(self, command: str, reads: int=0) -> Union[None, List[str]]:
+    def send_command(self, command: str, reads: int=0) -> None | list[str]:
         """Send a command to the engine.
 
         Parameters
@@ -277,7 +277,7 @@ class UCIEngine:
             self.outLog.append(x)
         return x
 
-    def _read_lines(self, buffer: int=-1) -> List[str]:
+    def _read_lines(self, buffer: int=-1) -> list[str]:
         """Read until end of stream or end of buffer.
 
         Parameters
@@ -287,7 +287,7 @@ class UCIEngine:
 
         Returns
         -------
-        List[str]
+        list[str]
             List of every line read
         """
         rtn = []
@@ -339,7 +339,7 @@ class UCIEngine:
         for item in seq:
             rtn += str(item) + " "
 
-    def _write_logs_to_file(self, logPath: Union[str, PathLike]) -> None:
+    def _write_logs_to_file(self, logPath: str | PathLike) -> None:
         """Write input and output logs to a file.
 
         Parameters
@@ -366,7 +366,7 @@ class UCIEngine:
 
     # Stoping engine
 
-    def close(self, logPath: Union[str, PathLike]="") -> None:
+    def close(self, logPath: str | PathLike="") -> None:
         """Close the engine and write logs to file if path is provided.
 
         Parameters
@@ -383,6 +383,7 @@ class UCIEngine:
     def __del__(self) -> None:
         """Stop the engine fully and kill process"""
         self.send_command("quit")
+        self.reader._cont = False
         self.eng.kill()
 
 
@@ -395,6 +396,9 @@ class Stockfish(UCIEngine):
     UCIEngine
         The UCIEngine class
     """
+    def __init__(self, enginePath: str | PathLike, *boolOpts: str, **options: str | int):
+        super().__init__(enginePath, *boolOpts, **options)
+    
     def display_board(self) -> None:
         """Display the board using the `d` Stockfish command."""
         self.send_command("d")
