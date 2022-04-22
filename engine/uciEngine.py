@@ -382,7 +382,7 @@ class UCIEngine:
 
     def __del__(self) -> None:
         """Stop the engine fully and kill process"""
-        self.send_command("quit")
+        self.eng.stdin.write(f"quit\n")
         self.reader._cont = False
         self.eng.kill()
 
