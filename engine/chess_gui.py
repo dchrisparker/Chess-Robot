@@ -1,16 +1,17 @@
 # By Chris Parker
-"""IMPORTS"""
+### IMPORTS ###
 from time import perf_counter, sleep
 import threading
 
-from chess import Pair, Piece, ChessBoard, Chess, alg_to_pair
+from chess import Bishop, Knight, Pair, Piece, ChessBoard, Chess, Queen, Rook, alg_to_pair
 from chess_enum import Type
+from chess_enum import Color as PColor
 from uciEngine import Stockfish
 
 import pygame
 from pygame.locals import (SRCALPHA, KEYDOWN, K_x, QUIT)
     
-"""CONSTANTS"""    
+### CONSTANTS ### 
 # Define constants for the screen width and height
 SCREEN_WIDTH = 1000
 SCREEN_HEIGHT = 800
@@ -28,7 +29,18 @@ RED = 0xff0000
 SQR_WHITE = 0xf0d9b5
 SQR_BLACK = 0xb58863
 
-START_STATE = None #"r3k2r/8/8/8/8/8/8/R3K2R w KQkq - 0 1"
+START_STATE = None 
+
+# File locations
+PIECE_PATH = "pieces\\"
+
+## ENUM ##
+# Who's playing?
+ONE_ENGINE = "one"
+TWO_ENGINE = "two"
+NO_ENGINE = "no"
+
+GAME_MODE = TWO_ENGINE
 
 # Engine vars
 ENGINE_WHITE = False # If the engine is playing white pieces
@@ -43,7 +55,10 @@ MAX_TIME = 1000 # ms
 
 LOG = (True, "log.txt")
 
-"""HELPER FUNCTIONS"""
+### GLOBALS ###
+paths = dict()
+
+### HELPER FUNCTIONS ###
 def average_rgb(c1: tuple[int, int, int], c2: tuple[int, int, int]) -> tuple[int, int, int]: 
     rtn = [None, None, None]
     for i, (val1, val2) in enumerate(tuple(zip(c1, c2))):
@@ -64,7 +79,7 @@ def std_to_pair(coord: tuple[int, int]) -> Pair:
 def pair_to_std(coord: Pair) -> tuple[int, int]:
     return (coord.x, 7- coord.y)
 
-"""BOARD"""
+### BOARD ###
 class GBoard(pygame.sprite.Sprite):
     def __init__(self):
         super().__init__()
@@ -135,6 +150,82 @@ class Info(pygame.sprite.Sprite):
         self.surf = pygame.Surface((self.side_len, self.side_len))
         self.rect = self.surf.get_rect()
         
+class PromoteChoice(pygame.sprite.Sprite):
+    def __init__(self, square_len: int, visible=False) -> None:    
+        self.square_len = square_len
+        self.border_width = square_len // 6
+        self.width = square_len * 4 + self.border_width
+        self.height = square_len + self.border_width
+        
+        self.visible = visible
+        
+        self.surf = pygame.surface.Surface((self.width, self.height))
+        self.rect = self.surf.get_rect()
+        
+        int_rect = pygame.Rect(0, 0, self.width - self.border_width, self.height - self.border_width)
+        int_rect.center = self.rect.center
+        
+        # Background
+        pygame.draw.rect(self.surf, BLACK, self.rect)
+        
+        # Foreground 
+        pygame.draw.rect(self.surf, DARK_GREY, int_rect, border_radius=5)
+                
+        self.piece_color = PColor.WHITE
+        self.pieces: list[GPiece] = [None] * 4
+        
+    def __draw_pieces(self) -> None:
+        self.pieces[0] = GPiece(paths[Queen(self.piece_color)], self.square_len)
+        self.pieces[1] = GPiece(paths[Rook(self.piece_color)], self.square_len)
+        self.pieces[2] = GPiece(paths[Bishop(self.piece_color)], self.square_len)
+        self.pieces[3] = GPiece(paths[Knight(self.piece_color)], self.square_len)
+            
+    def display_at(self, pos: tuple[int, int], color: PColor=PColor.WHITE):
+        self.piece_color = color
+        self.rect.center = pos
+        
+        self.__draw_pieces()
+        self.visible = True
+        
+    def get_piece(self, pos: tuple[int, int]) -> Type | None:
+        x = pos[0]
+        y = pos[1]
+    
+        queen_left = self.rect.left + self.border_width
+        queen_right = queen_left + self.square_len
+        
+        rook_left = queen_right
+        rook_right = rook_left + self.square_len
+        
+        bishop_left = rook_right
+        bishop_right = bishop_left + self.square_len
+        
+        knight_left = bishop_right
+        knight_right = knight_left + self.square_len
+        
+        if y > self.rect.top + self.border_width and y < self.rect.bottom - self.border_width:
+            if x > queen_left and x < queen_right:
+                return Type.QUEEN
+            if x > rook_left and x < rook_right:
+                return Type.ROOK
+            if x > bishop_left and x < bishop_right:
+                return Type.BISHOP
+            if x > knight_left and x < knight_right:
+                return Type.KNIGHT
+            
+        return None
+    
+    def collidepoint(self, x_y: tuple[int, int]):
+        return self.rect.collidepoint(x_y)
+    
+    def draw(self, surf: pygame.surface.Surface):
+        surf.blit(self.surf, self.rect)
+        
+        for i, piece in enumerate(self.pieces):
+            piece.rect.centery = self.rect.centery
+            piece.rect.left = self.rect.left + self.border_width + i * self.square_len
+            
+            surf.blit(piece.surf, piece.rect)
 
 class GPiece(pygame.sprite.Sprite):
     def __init__(self, file_name: str, size: int) -> None:
@@ -216,26 +307,47 @@ class GameLoop:
         self.running = True
         self.clock = pygame.time.Clock()
         
+        ## Multithread Vars ##
         # Checkmate & stalemate for threading
         self.checkmate = None
         self.stalemate = False
         
+        # Can the two players move
+        self.human_turn = True if not ENGINE_WHITE and (GAME_MODE != TWO_ENGINE) else False
+        self.cpu_turn = None
+        if GAME_MODE == TWO_ENGINE: 
+            self.cpu_turn = True
+        
         self.update = True
         self.start_game_state_thread()
+        
+        # Promotion window
+        self.promote_win: PromoteChoice = PromoteChoice(self.board.square_len*1.5)
+        self.promotion: tuple[int, int] = None # Square to promote
         
         # for row in self.board.centers:
         #     print(row)
         # Debug
-        # self.marker = CircleMarker((self.board.square_len / 2) * 0.5, (225, 0, 0, 155))
+        self.marker = CircleMarker((self.board.square_len / 2) / 3, (225, 0, 0, 125))
+        
+        if DEBUG:
+            self.engine.debug()
         
     def start(self):
         self.engine.new_game()
+        sleep(0.1)
         
         # Main loop
         while self.running:
             self.clock.tick(FPS)
-            if ENGINE_WHITE == self.game.white_turn:
-                self.engine_turn()
+            if GAME_MODE == ONE_ENGINE:
+                if ENGINE_WHITE == self.game.white_turn and not self.human_turn:
+                    self.engine_turn()
+                    self.update = True
+            if GAME_MODE == TWO_ENGINE:
+                if self.cpu_turn:
+                    self.engine_turn()
+                    self.update = True
                 
             # for loop through the event queue
             for event in pygame.event.get():
@@ -243,15 +355,16 @@ class GameLoop:
                 if event.type == KEYDOWN:
                     # If the Esc key is pressed, then exit the main loop
                     if event.key == K_x:
-                        print(self.game.white_cap)
-                        print(self.game.black_cap)
+                        print("WHITE CAP:", self.game.white_cap)
+                        print("BLACK CAP:", self.game.black_cap)
                         
                 # CLICK AND DRAG #
                 elif event.type == pygame.MOUSEBUTTONDOWN:
                     if event.button == 1: # Left-click
-                        self.pickup_piece(event)
+                        if self.human_turn:
+                            self.pickup_piece(event)
 
-                elif event.type == pygame.MOUSEBUTTONUP:
+                elif event.type == pygame.MOUSEBUTTONUP:                    
                     if event.button == 1:    
                         if self.piece_draging == True: # Only do something if a piece is being dragged
                             if self.board.rect.collidepoint(self.main_to_board(event.pos)):
@@ -259,6 +372,12 @@ class GameLoop:
                                 self.update = True
                             else:
                                 self.reset_dragged() # Can't place here, reset
+                        elif self.promote_win.visible and self.promote_win.collidepoint(event.pos):
+                            promote = self.promote_win.get_piece(event.pos)
+                            self.promote_win.visible = False
+                            
+                            self.game.promote(std_to_pair(self.promotion), prm_type=promote)
+                            self.draw_pieces() # Redraw
                             
                         self.piece_draging = False # Done dragging
 
@@ -266,18 +385,20 @@ class GameLoop:
                     self.drag_piece(event)
                 # Check for QUIT event. If QUIT, then set running to false.
                 elif event.type == QUIT:
-                    if LOG[0]:
-                        self.engine.close(LOG[1])
-                    self.running = False 
+                    self.close()
             
             # Get all the keys currently pressed
-            pressed_keys = pygame.key.get_pressed()
+            # pressed_keys = pygame.key.get_pressed()
             
             # Fill the screen with bg color
             self.screen.fill(DARK_GREY)
 
             # Draw board
             self.screen.blit(self.board.surf, self.BOARD_POS)
+            
+            # Promotion window
+            if self.promote_win.visible:
+                self.promote_win.draw(self.screen)
             
             # Draw all sprites
             for piece in self.pieces:
@@ -288,15 +409,15 @@ class GameLoop:
                 
             if self.checkmate:
                 print("WHITE" if self.checkmate == 1 else "BLACK", "IN CHECKMATE")
-                self.running = False
+                self.close()
                 
             if self.stalemate:
                 print("STALEMATE")
-                self.running = False
+                self.close()
                 
             # Draw debug tools
-            # if self.marker.visible:
-            #     self.screen.blit(self.marker.surf, self.marker.rect)
+            if self.marker.visible:
+                self.screen.blit(self.marker.surf, self.marker.rect)
             
             # Update the display
             pygame.display.flip()
@@ -304,11 +425,13 @@ class GameLoop:
     def draw_move_markers(self, square: tuple[int, int]):
         clr = self.game.get_piece(std_to_pair(square)).color
         
-        if (clr == 1 and self.game.white_turn) or (clr == -1 and not self.game.white_turn): # Correct turn
+        if ((clr == PColor.WHITE and self.game.white_turn) 
+            or (clr == PColor.BLACK and not self.game.white_turn)): # Correct turn
+            
             moves = self.game.legal_moves(std_to_pair(square))
             for move in moves: # Draw legal moves
                 move_sqr = pair_to_std(move)
-                self.possible_moves.get_sprites_at(self.board_to_main(self.board.get_center(move_sqr)))[0].visible= True
+                self.possible_moves.get_sprites_at(self.board_to_main(self.board.get_center(move_sqr)))[0].visible=True
             
     def clear_move_markers(self):
         for mark in self.possible_moves:
@@ -318,35 +441,48 @@ class GameLoop:
         # Draw the initial pieces
         self.white_list.clear()
         self.black_list.clear()
-        for y, row in enumerate(self.raw_board):
-            for x, sqr in enumerate(row):
-                p = sqr.piece
-                if p:
-                    if p.color == -1:
-                        gp = GPiece("pieces\\_b_"+p.type.value.lower()+".png", self.board.square_len)
+        if len(paths) > 0:
+            for y, row in enumerate(self.raw_board):
+                for x, sqr in enumerate(row):
+                    p = sqr.piece
+                    if p:
+                        gp = GPiece(paths[p], self.board.square_len)
                         gp.rect.center = self.board_to_main(self.board.centers[x][7-y])
-                        self.black_list.append(gp)
-                    else:
-                        gp = GPiece("pieces\\_w_"+p.type.value.lower()+".png", self.board.square_len)
-                        gp.rect.center = self.board_to_main(self.board.centers[x][7-y])
-                        self.white_list.append(gp)
-        
-        self.pieces = pygame.sprite.LayeredUpdates(self.white_list, self.black_list)
+                        if p.color == PColor.BLACK:
+                            self.black_list.append(gp)
+                        else:
+                            self.white_list.append(gp)
+
+            self.pieces = pygame.sprite.LayeredUpdates(self.white_list, self.black_list)
+        else:
+            new_board = ChessBoard()
+            for y, row in enumerate(new_board.board):
+                for x, sqr in enumerate(row):
+                    p = sqr.piece
+                    if p:
+                        path = [PIECE_PATH]
+                        if p.color == PColor.BLACK:
+                            path.append("_b_")
+                        else:
+                            path.append("_w_")
+                        
+                        path += [p.type.value.lower(), ".png"]
+                        paths[p] = "".join(path)
+            
+            self.draw_pieces()
                         
     def drop_piece(self, event: pygame.event.Event):
         to_sqr = self.board.get_square(self.main_to_board(event.pos))
         coord = self.board_to_main(self.board.get_center(to_sqr))
-
-        # self.marker.rect.center = coord
-        # self.marker.visible = True
         
+        self.marker.rect.center = self.board_to_main(self.board.get_center(self.dragged_last))
         self.dragged_piece.rect.center = coord # Snap to center of containing square
         
         frm = std_to_pair(self.dragged_last)
         to = std_to_pair(to_sqr)
         
         print(frm, to)
-        move = self.game.move(frm, to)
+        move = self.game.move(frm, to, auto_promote=False)
         if move:
             print(move)
             s = self.pieces.get_sprites_at(event.pos)
@@ -362,6 +498,14 @@ class GameLoop:
             if self.game.get_piece(to) == None:
                 self.draw_pieces()
                 
+            if (to_sqr[1] == 0 or to_sqr[1] == 7) and self.game.get_piece(to).type == Type.PAWN:
+                self.promotion = to_sqr
+                pos = ((self.BOARD_POS[0] + self.board.side_len) / 2, (self.BOARD_POS[1] + self.board.side_len) / 2)
+                self.promote_win.display_at(
+                    pos, color = self.game.get_piece(to).color
+                    )
+                
+            self.marker.visible = True
         else:
             self.reset_dragged()
             
@@ -387,14 +531,14 @@ class GameLoop:
             self.dragged_piece.rect.x = mouse_x + self.offset_x
             self.dragged_piece.rect.y = mouse_y + self.offset_y
             
-    """ENGINE FUNCTIONS"""
+    ### ENGINE FUNCTIONS ###
             
     def move_piece(self, frm: tuple[int, int], to: tuple[int, int]):
         frm_pair = std_to_pair(frm)
         to_pair = std_to_pair(to)
         
         print(frm_pair, to_pair)
-        move = self.game.move(frm_pair, to_pair)
+        move = self.game.move(frm_pair, to_pair, auto_promote=False)
         if move:
             print(move)
             to_pos = self.board_to_main(self.board.get_center(to))
@@ -408,7 +552,9 @@ class GameLoop:
             # Error or castling
             if self.game.get_piece(to_pair) == None:
                 self.draw_pieces()
-                print("REDRAW")
+            
+            self.marker.rect.center = self.board_to_main(self.board.get_center(frm))
+            self.marker.visible = True
         else:
             print(move)
             
@@ -421,9 +567,14 @@ class GameLoop:
         self.engine._read_lines()
         move_str = self.engine.outLog[-1].split()
         if move_str[0] == "bestmove":
-            start = pair_to_std(alg_to_pair(move_str[1][0:2]))
-            end = pair_to_std(alg_to_pair(move_str[1][2:4]))
-            self.move_piece(start, end)
+            if move_str[1] != "(none)":
+                start = pair_to_std(alg_to_pair(move_str[1][0:2]))
+                end = pair_to_std(alg_to_pair(move_str[1][2:4]))
+                self.move_piece(start, end)
+
+                if len(move_str[1]) > 4:
+                    self.game.promote(std_to_pair(end), Type(move_str[1][4].upper()))
+                    self.draw_pieces()
         else:
             print(move_str[0])
             print("INVALID MOVE")
@@ -447,6 +598,7 @@ class GameLoop:
         self.dragged_piece.rect.center = self.board_to_main(self.board.get_center(self.dragged_last))
         print("CAN'T PLACE HERE!!!")
     
+    ### Threading ###
     def _check_checkmate_stale(self):
         
         # TODO: Add Locks to these variables
@@ -454,18 +606,27 @@ class GameLoop:
             if self.update:
                 copy = self.game.bare_copy()
                 copy.update_all_legal()
-                if copy.in_checkmate(1):
-                    self.checkmate = 1
-                if copy.in_checkmate(-1):
-                    self.checkmate = -1
-                
+                if copy.in_checkmate(PColor.WHITE):
+                    self.checkmate = PColor.WHITE
+                elif copy.in_checkmate(PColor.BLACK):
+                    self.checkmate = PColor.BLACK
+                elif copy.in_stalemate():
+                    self.stalemate = True
+                    
                 sleep(0.01)
-                self.stalemate = copy.in_stalemate()
                 
                 self.update = False
         
     def start_game_state_thread(self):
         threading.Thread(target=self._check_checkmate_stale, daemon=True).start()
+        
+    ### END ###
+        
+    def close(self) -> None:
+        if LOG[0]:
+            self.engine.close(LOG[1])
+            
+        self.running = False
         
 
 def main():
