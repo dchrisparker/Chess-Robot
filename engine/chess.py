@@ -1,6 +1,6 @@
 # By Chris Parker
 # Typing imports
-from typing import Any, Literal
+from typing import Any, Callable, Literal
 
 # Class imports
 from abc import ABC, abstractmethod
@@ -93,6 +93,9 @@ class Piece(ABC):
 
     def __repr__(self) -> str:
         return self.__str__()
+    
+    def __hash__(self) -> int:
+        return hash((self.color, self.type))
 
     @abstractmethod
     def is_valid_path(self, start: Pair, end: Pair) -> bool | Literal['c']:
@@ -375,6 +378,16 @@ class King(Piece):
 
     def clone(self):
         return King(self.color)
+
+# Mapping all the types to their `Piece` constructors
+piece_dict: dict[Type, Callable[[Color], None]] = {
+    Type.PAWN   : Pawn,
+    Type.KING   : King,
+    Type.QUEEN  : Queen,
+    Type.ROOK   : Rook,
+    Type.BISHOP : Bishop,
+    Type.KNIGHT : Knight
+}
 
 class Square:
         def __init__(self, coordinates: Pair, piece: Piece | None) -> None:
@@ -1088,7 +1101,7 @@ class Chess:
         self.all_legal_w = self.all_legal_moves(Color.WHITE)
         self.all_legal_b = self.all_legal_moves(Color.BLACK)
     
-    def move(self, frm: Pair, to: Pair) -> bool:
+    def move(self, frm: Pair, to: Pair, auto_promote = True) -> bool:
         """Move piece from a square to another if that move is valid. 
         NOTE: Automatically captures pieces.
         NOTE: Does not check for check or checkmate
@@ -1099,6 +1112,9 @@ class Chess:
             Start position
         to : Pair
             End position
+        auto_promote : bool
+            Should the program automatically promote pawns to queens?, by default True
+            NOTE: If this is false, Chess.promote() should be called manually with the desired piece
 
         Returns
         -------
@@ -1109,7 +1125,7 @@ class Chess:
         nxt, can = self.next_move(frm, to)
         
         if can and not nxt.in_check(Color.WHITE if self.white_turn else Color.BLACK):
-            rtn, cap = self.__move(frm, to)
+            rtn, cap = self.__move(frm, to, auto_promote)
             
             if cap:
                 if cap.color == Color.WHITE:
@@ -1119,7 +1135,7 @@ class Chess:
         
         return rtn
     
-    def __move(self, frm: Pair, to: Pair) -> tuple[bool, Piece | None]:
+    def __move(self, frm: Pair, to: Pair, auto_promote = True) -> tuple[bool, Piece | None]:
         """Move piece from a square to another if that move is valid. 
         NOTE: Internal function! Use Chess.move() instead
 
@@ -1129,6 +1145,9 @@ class Chess:
             Start position
         to : Pair
             End position
+        auto_promote : bool
+            Should the program automatically promote pawns to queens?, by default True
+            NOTE: If this is false, Chess.promote() should be called manually with the desired piece
 
         Returns
         -------
@@ -1169,6 +1188,11 @@ class Chess:
         else: # Nothing works
             return False, None
         
+        # Promotion
+        if auto_promote and self.get_piece(to):
+            if self.get_piece(to).type == Type.PAWN and (to.y == 7 or to.y == 0):
+                self.promote(to)
+        
         # Increment move counters after successful move
         if not self.white_turn:
             self.full_move += 1
@@ -1188,7 +1212,7 @@ class Chess:
     
     def next_move(self, frm: Pair, to: Pair) -> tuple['Chess', bool]:
         new_chess = self.bare_copy()
-        rtn, _ = new_chess.__move(frm, to)
+        rtn, _ = new_chess.__move(frm, to, False)
         
         return new_chess, rtn
     
@@ -1282,6 +1306,32 @@ class Chess:
                 option_string += "q"
 
         return option_string if bool(option_string) else "-"
+        
+    def promote(self, pos: Pair, prm_type: Type=Type.QUEEN) -> bool:
+        """Promote pawn at given square to new piece.
+
+        Parameters
+        ----------
+        pos : Pair
+            Square with pawn to promote
+        piece : Type, optional
+            Type of the piece to promote to, by default Type.QUEEN
+            
+        Returns
+        -------
+        bool
+            True if successful, otherwise False
+        """
+        
+        piece = self.get_piece(pos)
+        
+        if piece.type != Type.PAWN or prm_type == Type.PAWN or prm_type == Type.KING:
+            return False
+        p = piece_dict[prm_type]
+        self.board.set_square(pos, p(piece.color))
+        self.get_piece(pos).has_moved = True # Prevent any weird edge cases
+        
+        return True
         
     def get_piece(self, pos: Pair) -> Piece:
         """Get piece at postion.
