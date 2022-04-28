@@ -920,6 +920,17 @@ class Chess:
         bool
             True if the game is in stalemate
         """
+        if self.half_move >= (75 * 2):
+            return True
+        
+        count = 0
+        for row in self.board.board:
+            for sqr in row:
+                if sqr.piece and sqr.piece.type != Type.KING:
+                    count += 1
+        
+        if count == 0:
+            return True
         
         if self.white_turn and len(self.all_legal_w) == 0:
             return True
@@ -945,11 +956,12 @@ class Chess:
         legal: list[Pair] = list()
         
         if piece:
-            if piece.type == Type.ROOK:
+            check = self.in_check(piece.color)
+            if piece.type == Type.ROOK and not check:
                 legal = self.__rook_legal(pair)
-            elif piece.type == Type.BISHOP:
+            elif piece.type == Type.BISHOP and not check:
                 legal = self.__bishop_legal(pair)
-            elif piece.type == Type.QUEEN:
+            elif piece.type == Type.QUEEN and not check:
                 legal = self.__queen_legal(pair)
             else:
                 for end in piece.get_all_ends(pair):
@@ -960,12 +972,12 @@ class Chess:
                             legal.append(end)
 
                 if piece.type == Type.KING:
-                    for corner in (Pair(0, 0), Pair(0,7), Pair(7, 0), Pair(7, 7)):
-                        # if self.get_piece(corner) and self.can_castle(pair, corner):
-                        #     legal.append(corner)
-                        nxt1, can1 = self.next_move(pair, corner)
+                    for sqr in (Pair(0, 0), Pair(0, 7), Pair(0, 2), Pair(0, 6),
+                                Pair(7, 0), Pair(7, 7), Pair(7, 2), Pair(7, 6)):
+                        
+                        nxt1, can1 = self.next_move(pair, sqr)
                         if can1 and not nxt1.in_check(piece.color):
-                            legal.append(corner)
+                            legal.append(sqr)
                             
                     
         # legal.sort(key = lambda l: (l.y, l.x))
@@ -1155,6 +1167,7 @@ class Chess:
             True if movement was successful, False otherwise
         """
         start = self.board.get_square(frm)
+        s_piece = start.piece
         pwn = start.piece.type == Type.PAWN
         cap = None
         
@@ -1166,10 +1179,10 @@ class Chess:
             
             # En passant
             self.en_pass_capture = None
-            if self.en_pass and to == self.en_pass:
+            if self.en_pass and to == self.en_pass and pwn:
                 cap_pos = Pair(to.y + (-1 if self.white_turn else 1), to.x)
                                 
-                if self.get_piece(cap_pos).color != start.piece.color:
+                if self.get_piece(cap_pos).color != s_piece.color:
                     cap = self.get_piece(cap_pos)
                     self.en_pass_capture = cap_pos
                     self.board.set_square(cap_pos, None)
@@ -1180,7 +1193,17 @@ class Chess:
                 self.en_pass = Pair(frm.y + sign, frm.x)
             
         # Check for castling conditions
-        elif (start.piece and self.get_piece(to)):
+        elif (start.piece.type == Type.KING and not start.piece.has_moved):
+                match to:
+                    case Pair(y=0, x=2):
+                        to = Pair(0, 0)
+                    case Pair(y=0, x=6):
+                        to = Pair(0, 7)
+                    case Pair(y=7, x=2):
+                        to = Pair(7, 0)
+                    case Pair(y=7, x=6):
+                        to = Pair(7, 7)
+                        
                 if self.can_castle(frm, to): # Castling worked
                     self.castle(frm, to)
                 else:
@@ -1227,8 +1250,17 @@ class Chess:
             self.board.move(to, Pair(to.y, frm.x - 1))
     
     def can_castle(self, frm: Pair, to: Pair) -> bool:
+
+        if not(
+            to == alg_to_pair("a1") or to == alg_to_pair("h1") or to == alg_to_pair("a8") or to == alg_to_pair("h8")
+            ):
+            return False
+        
         king = self.get_piece(frm)
         rook = self.get_piece(to)
+        
+        if not king or not rook:
+            return False
         
         # Make sure the pieces are a king and a rook
         if not (king.type == Type.KING and rook.type == Type.ROOK):
@@ -1236,11 +1268,6 @@ class Chess:
         
         # Right color?
         if not (king.color == rook.color):
-            return False
-
-        if not(
-            to == alg_to_pair("a1") or to == alg_to_pair("h1") or to == alg_to_pair("a8") or to == alg_to_pair("h8")
-            ):
             return False
         
         if self.in_check(king.color):
@@ -1512,54 +1539,43 @@ def in2D(data: Any, lst: list[list[Any]]) -> bool:
         
     return False
  
-# def main():
-#     def __formatted_legal_moves(c: Chess, color: Color) -> str:
-#         string = list()
-#         legal = c.all_legal_moves(color)
-#         for row in legal:
-#             row_string = [f"{c.get_piece(row[0]).type.value}{row[0].__str__()}:"]
-#             for col in row[1]:
-#                 row_string.append(f"{c.get_piece(col) or ''}{col.__str__()}")
+def main():
+    def __formatted_legal_moves(c: Chess, color: Color) -> str:
+        string = list()
+        legal = c.all_legal_moves(color)
+        for row in legal:
+            row_string = [f"{c.get_piece(row[0]).type.value}{row[0].__str__()}:"]
+            for col in row[1]:
+                row_string.append(f"{c.get_piece(col) or ''}{col.__str__()}")
                 
-#             string.append(" ".join(row_string))
+            string.append(" ".join(row_string))
             
-#         return "\n".join(string)
+        return "\n".join(string)
             
         
-#     c = Chess()
-#     print(c.board.__repr__())
-#     print(c.castle_options())
-#     # c.board.move(alg_to_pair("h7"), alg_to_pair("h6"))
-#     # c.board.move(alg_to_pair("h8"), alg_to_pair("h7"))
-#     # print(c.board.__repr__())
-#     # print(c.castle_options())
+    c = Chess()
+    print(c.board.__repr__())
+    print(c.castle_options())
+    # c.board.move(alg_to_pair("h7"), alg_to_pair("h6"))
+    # c.board.move(alg_to_pair("h8"), alg_to_pair("h7"))
+    # print(c.board.__repr__())
+    # print(c.castle_options())
     
-#     c.set_FEN("r3k2r/pppppppp/8/8/8/8/PPPPPPPP/R3K2R w KQkq - 0 1")
+    c.set_FEN("r3k2r/pppppppp/8/8/8/8/PPPPPPPP/R3K2R w KQkq - 0 1")
     
-#     # Show every piece and whether or not it has moved
-#     for row in range(8):
-#         for col in range(8):
-#             piece = c.get_piece(Pair(row, col))
-#             if piece:
-#                 print(f"{piece} at {Pair(row, col).get_alg_coords()} has moved: {piece.has_moved}")
+    # Show every piece and whether or not it has moved
+    for row in range(8):
+        for col in range(8):
+            piece = c.get_piece(Pair(row, col))
+            if piece:
+                print(f"{piece} at {Pair(row, col).get_alg_coords()} has moved: {piece.has_moved}")
     
-#     print(__formatted_legal_moves(c, Color.BLACK))
+    print(__formatted_legal_moves(c, Color.BLACK))
     
-#     print(c.castle(alg_to_pair("e1"), alg_to_pair("a1")))
-#     print(c.castle(alg_to_pair("e8"), alg_to_pair("h8")))
+    print(c.castle(alg_to_pair("e1"), alg_to_pair("a1")))
+    print(c.castle(alg_to_pair("e8"), alg_to_pair("h8")))
     
-#     print(c.__repr__())
-
-def main():
-    x = Chess()
-    y = Chess()
-    
-    x.set_FEN("rnbqkbnr/pp1ppppp/2p5/8/6Q1/4P3/PPPP1PPP/RNB1KBNR b KQkq - 0 1")
-    
-    print(x == y, x.board == y.board, x.board.board == y.board.board)
-    print(x.board.EMPTY_BOARD)
-    print()
-    print(y.board.EMPTY_BOARD)
+    print(c.__repr__())
     
 
 if __name__ == "__main__":
