@@ -1,5 +1,5 @@
 .vscode
-.log
+*.log
 robot.code-workspace
 samples
 depreciated
