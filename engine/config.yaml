@@ -1,0 +1,21 @@
+# Configuration file for chess_gui.py
+
+SCREEN:
+  SCREEN_WIDTH: 1000
+  SCREEN_HEIGHT: 800
+  FPS: 144
+
+FILES:
+  PIECE_PATH: "pieces\\"
+  ENGINE_PATH: "stockfish_13.exe"
+
+GAME:
+  START_STATE: !!null # Null or false gives the default state
+  GAME_MODE: 1 # 0 - 2
+
+ENGINE:
+  ENGINE_WHITE: False # Whether the engine starts or goes second
+  DEBUG: False
+  MAX_TIME: 1000 # In milliseconds
+  ENGINE_ARGS: !!seq ["UCI_LimitStrength"]
+  ENGINE_KWARGS: !!map {"UCI_Elo" : 1000, "Threads" : 4,  "Hash" : 512}
