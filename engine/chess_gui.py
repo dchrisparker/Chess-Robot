@@ -60,9 +60,9 @@ DEBUG = False
 """Engine debug mode enable"""
 ENGINE_ARGS = tuple()
 ENGINE_KWARGS = {"Threads" : 2, "Hash" : 512}
-MAX_TIME = 500 # ms
+MAX_TIME = 5000 # ms
 
-ENG_LOG = (False, "")
+ENG_LOG = (DEBUG, "console.log")
 
 ### GLOBALS ###
 paths = dict()
@@ -115,8 +115,9 @@ def read_cfg(cfg_path: str = CFG_PATH) -> None:
                         global ENGINE_WHITE
                         ENGINE_WHITE = v
                     case "DEBUG":
-                        global DEBUG
+                        global DEBUG, ENG_LOG
                         DEBUG = v
+                        ENG_LOG = (DEBUG, ENG_LOG[1])
                     case "MAX_TIME":
                         global MAX_TIME
                         MAX_TIME = v
@@ -208,8 +209,8 @@ class GBoard(pygame.sprite.Sprite):
 
     def __populate_centers(self):
         """Fill the values of `self.centers`."""
-        for row in range(8):
-            for col in range(8):
+        for row in range(len(self.centers)):
+            for col in range(len(self.centers[0])):
                 self.centers[row][col] = (row * self.square_len + self.square_len // 2, 
                                            col * self.square_len + self.square_len // 2
                                            )
@@ -504,6 +505,8 @@ class GameLoop:
         self.clock = pygame.time.Clock()
         
         ## Multithread Vars ##
+        self.__threads: list[threading.Thread] = list()
+        
         # Checkmate & stalemate for threading
         self.checkmate = None
         self.stalemate = False
@@ -539,14 +542,13 @@ class GameLoop:
         while self.running:
             self.clock.tick(FPS)
             if GAME_MODE == ONE_ENGINE:
-                if ENGINE_WHITE == self.game.white_turn and not self.human_turn:
+                if ENGINE_WHITE == self.game.white_turn and self.cpu_turn:
+                    self.cpu_turn = False
+                    self.human_turn = False
                     self.engine_turn()
-                    self.update = True
-                    self.human_turn = True
             if GAME_MODE == TWO_ENGINE:
                 if self.cpu_turn:
                     self.engine_turn()
-                    self.update = True
                 
             # for loop through the event queue
             for event in pygame.event.get():
@@ -735,6 +737,9 @@ class GameLoop:
             if GAME_MODE == ONE_ENGINE:
                 self.human_turn = False
             self.marker.visible = True
+            
+            if GAME_MODE == ONE_ENGINE:
+                self.cpu_turn = True
         else:
             self.reset_dragged() # If nothing works, reset the piece
             
@@ -792,9 +797,10 @@ class GameLoop:
         
         org_p = self.game.get_piece(frm_pair)
         
-        print(frm_pair, to_pair)
+        #print(frm_pair, to_pair)
         move = self.game.move(frm_pair, to_pair, auto_promote=False)
-        print(move)
+        #print(move)
+        logging.info("%s%s, %s", frm_pair, to_pair, move)
         if move:
             to_pos = self.board_to_main(self.board.get_center(to))
             s = self.get_sprites_at(to)
@@ -813,7 +819,7 @@ class GameLoop:
             self.marker.rect.center = self.board_to_main(self.board.get_center(frm))
             self.marker.visible = True
 
-    def engine_turn(self) -> None:
+    def __engine_turn(self) -> None:
         """Have the engine make a move."""
         self.engine.send_command("position fen " + self.game.get_FEN())
         self.engine.go(movetime = MAX_TIME)
@@ -831,13 +837,24 @@ class GameLoop:
                 
                 if len(move_str[1]) > 4:
                     self.game.promote(std_to_pair(end), Type(move_str[1][4].upper()))
+                    logging.info("Promotion to %s by engine", move_str[1][4])
                     self.draw_pieces()
                     
                 read = False
             elif move_str[1] == "(none)":
+                logging.warning("Nullmove received")
                 read = False
             else:
                 read = True
+                
+        if GAME_MODE == ONE_ENGINE:
+            self.human_turn = True
+        self.update = True
+                
+        for thread in self.__threads:
+            if thread.name == "engine":
+                self.__threads.remove(thread)
+                break # Deg tears :'(
 
     def pause(self) -> None:
         """Stop piece movement w/o freezing window."""
@@ -878,7 +895,7 @@ class GameLoop:
         NOTE: DO NOT RUN IN MAIN!!
         """
         # TODO: Add Locks to these variables
-        while True:
+        while self.running:
             if self.update:
                 copy = self.game.bare_copy()
                 copy.update_all_legal()
@@ -897,7 +914,24 @@ class GameLoop:
         """Check if the game is in stalemate or someone has won.
         NOTE: Starts another thread
         """
-        threading.Thread(target=self.__check_checkmate_stale, daemon=True).start()
+        self.__threads.append(
+            threading.Thread(
+                target=self.__check_checkmate_stale,
+                name="check-stale",
+                daemon=True)
+            )
+        self.__threads[-1].start()
+
+    def engine_turn(self):
+        """Have the engine make a move."""
+        self.__threads.append(
+            threading.Thread(
+                target=self.__engine_turn,
+                name="engine",
+                daemon=True
+            )
+        )
+        self.__threads[-1].start()
 
     ### END ###
 
@@ -906,7 +940,11 @@ class GameLoop:
         logging.info("Closing game")
         if ENG_LOG[0]:
             self.engine.close(ENG_LOG[1])
-            
+        
+        for thread in self.__threads:
+            logging.info("Closing: %s", thread.name)
+            thread.join(0.5)
+        
         self.running = False
 
 
