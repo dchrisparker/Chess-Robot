@@ -60,7 +60,7 @@ DEBUG = False
 """Engine debug mode enable"""
 ENGINE_ARGS = tuple()
 ENGINE_KWARGS = {"Threads" : 2, "Hash" : 512}
-MAX_TIME = 5000 # ms
+MAX_TIME = 1000 # ms
 
 ENG_LOG = (DEBUG, "console.log")
 
