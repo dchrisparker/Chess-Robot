@@ -1,14 +1,13 @@
 # By Chris Parker
 
 ### IMPORTS ###
-from glob import glob
-from time import perf_counter, sleep
+from time import sleep
 import threading
 import logging
 from typing import Any
 import yaml
 
-from chess import Bishop, Knight, Pair, Piece, ChessBoard, Chess, Queen, Rook, alg_to_pair
+from chess import Bishop, Knight, Pair, ChessBoard, Chess, Queen, Rook, alg_to_pair
 from chess_enum import Type
 from chess_enum import Color as PColor
 from uciEngine import Stockfish
@@ -319,7 +318,7 @@ class PromoteChoice(pygame.sprite.Sprite):
         Parameters
         ----------
         pos : tuple[int, int]
-            Screen postion to set the center of the window.
+            Screen position to set the center of the window.
         color : PColor, optional
             Color of the pieces, by default PColor.WHITE
         """
@@ -335,7 +334,7 @@ class PromoteChoice(pygame.sprite.Sprite):
         Parameters
         ----------
         pos : tuple[int, int]
-            Screen postion
+            Screen position
 
         Returns
         -------
@@ -498,7 +497,7 @@ class GameLoop:
         # Piece dragging
         self.dragged_piece: GPiece = GPiece(None, 0)
         self.dragged_last = (0, 0)
-        self.piece_draging = False
+        self.piece_dragging = False
         
         # Variable to keep the main loop running
         self.running = True
@@ -567,7 +566,7 @@ class GameLoop:
 
                 elif event.type == pygame.MOUSEBUTTONUP:                    
                     if event.button == 1:    
-                        if self.piece_draging == True: # Only do something if a piece is being dragged
+                        if self.piece_dragging == True: # Only do something if a piece is being dragged
                             if self.board.rect.collidepoint(self.main_to_board(event.pos)):
                                 self.drop_piece(event)
                                 self.update = True
@@ -580,7 +579,7 @@ class GameLoop:
                             self.game.promote(std_to_pair(self.promotion), prm_type=promote)
                             self.draw_pieces() # Redraw
                             
-                        self.piece_draging = False # Done dragging
+                        self.piece_dragging = False # Done dragging
 
                 elif event.type == pygame.MOUSEMOTION:
                     self.drag_piece(event)
@@ -706,10 +705,11 @@ class GameLoop:
         
         org_p = self.game.get_piece(frm)
         
-        print(frm, to)
+        # print(frm, to)
         move = self.game.move(frm, to, auto_promote=False)
+        logging.info("%s %s, %s", frm, to, move)
         if move:
-            print(move)
+            # print(move)
             s = self.pieces.get_sprites_at(event.pos)
             if len(s) > 1:
                 self.pieces.remove(s[0])
@@ -760,7 +760,7 @@ class GameLoop:
             self.dragged_last = self.board.get_square(self.main_to_board(event.pos)) # Save position
             self.draw_move_markers(self.dragged_last)
             self.pieces.move_to_front(self.dragged_piece) # Should be at top
-            self.piece_draging = True
+            self.piece_dragging = True
             
             mouse_x, mouse_y = event.pos
             # Set an offset so the piece doesn't snap to center of mouse
@@ -775,7 +775,7 @@ class GameLoop:
         event : pygame.event.Event
             Event object
         """
-        if self.piece_draging: # Move the current piece if we have one
+        if self.piece_dragging: # Move the current piece if we have one
             mouse_x, mouse_y = event.pos
             self.dragged_piece.rect.x = mouse_x + self.offset_x
             self.dragged_piece.rect.y = mouse_y + self.offset_y
@@ -887,7 +887,7 @@ class GameLoop:
     def reset_dragged(self):
         """Move dragged piece back to its original square."""
         self.dragged_piece.rect.center = self.board_to_main(self.board.get_center(self.dragged_last))
-        print("CAN'T PLACE HERE!!!")
+        # print("CAN'T PLACE HERE!!!")
 
     ### Threading ###
     def __check_checkmate_stale(self):
