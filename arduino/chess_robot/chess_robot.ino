@@ -432,14 +432,12 @@ void setRPM(float rpm) {
 }
 
 void enable() {
-	x0.enable();
-	x1.enable();
+	x.enable();
 	y.enable();
 }
 
 void disable() {
-	x0.disable();
-	x1.disable();
+	x.disable();
 	y.disable();
 }
 
