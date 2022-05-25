@@ -16,9 +16,32 @@
 #include "SyncDriver.h"
 #include "Servo.h"
 
+// Codes
+// Sending
+#define INIT 0x01
+#define EXIT 0xFF
+#define CAL 0xE0
+
+#define REQ_STATUS 0x93
+#define REQ_POS 0x20
+#define REQ_SQR 0x89
+#define SND_SQR 0xA9
+#define AXIS_MOVE 0xAD
+#define HLF_MOVE 0xBD
+#define HOME_MOVE 0xDB
+
+// Receiving
+#define _NULL 0x00
+#define WAITING 0x76
+#define MOVING 0x0A
+#define MESSAGE 0x22
+
 // Stepper properties
 #define STEPS 200
 #define MS 16
+
+// Reset
+#define RESET A5
 
 // Servo 
 #define SERVO 6
@@ -49,13 +72,16 @@
 #define DOWN 0
 
 #define SQUARES 8
-#define CRUISE_RPM 40
-#define X_OFFSET 10 * MS
+#define CRUISE_RPM 25
+#define X_OFFSET 15 * MS
 #define Y_OFFSET 12 * MS
 
 // For debugging/utility
 #define LED_ON digitalWrite(LED_BUILTIN, HIGH)
 #define LED_OFF digitalWrite(LED_BUILTIN, LOW)
+
+// Serial 
+byte msg;
 
 // Servo
 Servo servo;
@@ -86,10 +112,14 @@ unsigned short yHalfSqr;
 volatile bool limit;
 
 void setup() {
+    digitalWrite(RESET, HIGH);
+
 	// Start the serial
 	Serial.begin(115200);
 	Serial.setTimeout(1);
+
 	pinMode(LED_BUILTIN, OUTPUT);
+    pinMode(RESET, OUTPUT);
 	pinMode(LOGIC_V, INPUT);
 
 	pinMode(LIMITS, INPUT);
@@ -113,7 +143,19 @@ void setup() {
 	yPos = 0;
 
 	LED_OFF;
+
 	delay(1000); // Wait a little bit so everything is powered
+
+    while (!Serial) {} // Wait until serial is open
+    Serial.write(WAITING);
+    msg = _NULL;
+
+    while (msg != INIT) {
+        if (Serial.available() > 0) {
+            msg = Serial.read();
+        }
+        delay(10);
+    }
 
     // Wait until logic voltage reaches/exceeds 4V
 	while (analogRead(LOGIC_V) < 768) { 
@@ -147,6 +189,7 @@ void setup() {
 
 void loop() {
     if (limit) {
+        limit = false;
         delay(100);
         enable();
         delay(100);
@@ -154,21 +197,177 @@ void loop() {
         moveHome();
     }
 
-    while (!Serial.available()) {}
-    String ser = Serial.readStringUntil('\n');
+    if (Serial.available() > 0) {
+        handleCommand();
+    } else {
+        disable();
+    }
 
-    ser.replace(" ", "");
+}
 
-    int sqr1 = ser.substring(0, ser.indexOf(',')).toInt();
-    int sqr2 = ser.substring(ser.indexOf(',')).toInt();
+void handleCommand() {
+    msg = Serial.read();
 
-    moveToCenter(sqr1, sqr2);
+    // Check for commands
+    switch (msg) {
+    case EXIT:
+        reset();
+        break;
+    case CAL:
+        Serial.write(MOVING);
+        enable();
+        delay(500);
+        calibrate();
+        break;
+    case REQ_STATUS:
+        Serial.write(WAITING);
+        break;
+    case REQ_POS:
+        Serial.println(String(xPos) + "," + String(yPos));
+        break;
+    case REQ_SQR:
+        Serial.println(String((xHalfSqr + 1) / 2) + "," + String((yHalfSqr + 1) / 2));
+        break;
+    case SND_SQR:
+        enable();
+        delay(250);
+        movePieceSerial();
+        break;
+    case AXIS_MOVE:
+        enable();
+        delay(250);
+        moveSerial();
+        break;
+    case HLF_MOVE:
+        enable();
+        delay(250);
+        halfMoveSerial();
+        break;
+    case HOME_MOVE:
+        enable();
+        delay(250);
+        movePieceHomeSerial();
+        break;
+    default:
+        disable();
+        Serial.write(MESSAGE);
+        Serial.println("INVALID");
+        break;
+    }
+}
 
+void movePieceSerial() {
+    String sqrs = Serial.readStringUntil('\n');
+    short sep = sqrs.indexOf(';');
+    short c1 = sqrs.indexOf(',');
+    short c2 = sqrs.indexOf(',', sep);
+
+    short s1X = sqrs.substring(0, c1).toInt();
+    short s1Y = sqrs.substring(c1+1, sep).toInt();
+
+    short s2X = sqrs.substring(sep+1, c2).toInt();
+    short s2Y = sqrs.substring(c2+1).toInt();
+
+
+    if ((s1X < SQUARES) && (s1Y < SQUARES) && (s2X < SQUARES) && (s2Y < SQUARES)) {
+        Serial.write(MOVING);
+        delayMicroseconds(10);
+
+        moveToCenter(s1X, s1Y);
+        delay(100);
+
+        pickupPiece();
+        delay(1000);
+
+        dragPiece(s2X, s2Y);
+        delay(1000);
+
+        dropPiece();
+    } else {
+        Serial.write(MESSAGE);
+        Serial.println("INVALID");
+    }
+}
+
+void moveSerial() {
+    String sqr = Serial.readStringUntil('\n');
+    short c = sqr.indexOf(',');
+
+    short sX = sqr.substring(0, c).toInt();
+    short sY = sqr.substring(c+1).toInt();
+
+
+    if ((sX < SQUARES) && (sY < SQUARES)) {
+        Serial.write(MOVING);
+        delayMicroseconds(10);
+
+        moveToCenter(sX, sY);
+        delay(100);
+        
+    } else {
+        Serial.write(MESSAGE);
+        Serial.println("INVALID");
+    }
+}
+
+void halfMoveSerial() {
+    String sqr = Serial.readStringUntil('\n');
+    short c = sqr.indexOf(',');
+
+    short sX = sqr.substring(0, c).toInt();
+    short sY = sqr.substring(c+1).toInt();
+
+    if ((sX < SQUARES*2) && (sY < SQUARES*2)) {
+        Serial.write(MOVING);
+        delayMicroseconds(10);
+
+        moveToHalfDirect(sX, sY);
+        delay(100);
+        
+    } else {
+        Serial.write(MESSAGE);
+        Serial.println("INVALID");
+    }
+}
+
+void movePieceHomeSerial() {
+    String sqr = Serial.readStringUntil('\n');
+    short c = sqr.indexOf(',');
+
+    short sX = sqr.substring(0, c).toInt();
+    short sY = sqr.substring(c+1).toInt();
+
+    if ((sX < SQUARES) && (sY < SQUARES)) {
+        Serial.write(MOVING);
+        delayMicroseconds(10);
+
+        moveToCenter(sX, sY);
+        delay(100);
+
+        pickupPiece();
+        delay(100);
+
+        dragHome();
+        delay(300);
+
+        dropPiece();
+        delay(100);
+        
+    } else {
+        Serial.write(MESSAGE);
+        Serial.println("INVALID");
+    }
 }
 
 /// Calibrates the board
 void calibrate() {
+    Serial.write(MESSAGE);
 	Serial.println("CALIBRATION");
+
+    pickupPiece();
+    dropPiece();
+
+    Serial.write(MESSAGE);
 	Serial.println("HOMING TO ORIGIN");
 
 	/*
@@ -228,6 +427,7 @@ void calibrate() {
 
 	delay(500);
 
+    Serial.write(MESSAGE);
 	Serial.println("HOMING TO MAXIMA");
 
 	// Begin moving an arbitrary number of steps
@@ -268,20 +468,24 @@ void calibrate() {
     xPos = xMax = steps - stepsLeft[X] - X_OFFSET;
     yPos = yMax = steps - stepsLeft[Y] - Y_OFFSET;
 
+    Serial.write(MESSAGE);
 	Serial.print("CALIBRATION DONE\t");
 	Serial.println("xMax: " + String(xMax) + " yMax: " + String(yMax));
 
 	LED_OFF;
 
+    Serial.write(MESSAGE);
 	Serial.println("MOVING HOME");
-    setRPM(CRUISE_RPM);
+    setRPM(CRUISE_RPM * 2);
 	moveHome(); // Return to origin
 
 	disable();
+
+    Serial.write(WAITING);
 }
 
 void pickupPiece() {
-    servo.write(0);
+    servo.write(180);
     delay(100);
 }
 
@@ -318,6 +522,27 @@ void moveToCenter(unsigned short xSqr, unsigned short ySqr) {
     setRPM(CRUISE_RPM);
 }
 
+void moveToHalfDirect(unsigned short xHalf, unsigned short yHalf) {
+    long xSteps = xHalf - xPos;
+    long ySteps = yHalf - yPos;
+
+    moveXY(xSteps, ySteps);
+
+    xHalfSqr = xHalf;
+    yHalfSqr = yHalf;
+}
+
+void moveToHalfComp(unsigned short xHalf, unsigned short yHalf) {
+    long xSteps = xHalf * halfSqr - xPos;
+    long ySteps = yHalf * halfSqr - yPos;
+
+    moveX(xSteps);
+    moveY(ySteps);
+
+    xHalfSqr = xHalf;
+    yHalfSqr = yHalf;
+}
+
 void dragPiece(unsigned short xSqr, unsigned short ySqr) {
     unsigned short realX = xSqr * 2 + 1;
     unsigned short realY = ySqr * 2 + 1;
@@ -330,8 +555,8 @@ void dragPiece(unsigned short xSqr, unsigned short ySqr) {
 
     moveXY(-halfSqr, -halfSqr);
 
-    xHalfSqr += halfSqr;
-    yHalfSqr += halfSqr;
+    xHalfSqr -= 1;
+    yHalfSqr -= 1;
 
     setRPM(CRUISE_RPM);
 
@@ -420,6 +645,28 @@ void moveHome() {
 	LED_OFF;
 }
 
+/// Move to (0, 0) on the edges
+void dragHome() {
+    LED_ON;
+    
+    if (xHalfSqr % 2 == 1) {
+        moveX(-halfSqr);
+        xHalfSqr -= 1;
+        xPos -= halfSqr;
+    }
+    if (yHalfSqr % 2 == 1) {
+        moveY(-halfSqr);
+        yHalfSqr -= 1;
+        yPos -= halfSqr;
+    }
+
+    moveX(-xPos);
+    delay(250);
+    moveY(-yPos);
+
+    LED_OFF;
+}
+
 /**
  * @brief Sets the RPM of every stepper.
  *
@@ -455,4 +702,8 @@ void stop() {
 	disable();
 
 	LED_ON;
+}
+
+void reset() {
+    digitalWrite(RESET, LOW);
 }
