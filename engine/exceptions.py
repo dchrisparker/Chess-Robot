@@ -1,3 +1,9 @@
+""" Exceptions
+    ----------
+    Contains all the exceptions used by the chess package.
+
+"""
+
 from os import PathLike
 from typing import Union
 

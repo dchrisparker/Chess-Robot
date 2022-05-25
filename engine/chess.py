@@ -1,404 +1,30 @@
 # By Chris Parker
 # Typing imports
-from typing import Any, Callable, Literal
-
-# Class imports
-from abc import ABC, abstractmethod
+from typing import Any, Literal
 
 # Chess Imports
 from exceptions import InvalidFENError
 from chess_enum import Color, Column, Type
+from pair import Pair
+from pieces import *
 
 # Utility 
 from copy import deepcopy
-from linked_list import DoubleLinkedList as DLL, Node
 
-# Testing/Debug
-from time import perf_counter
-
-class Pair:
-    """A class representing a coordinate on a chess board."""
-    A = 65 # A in ASCII
-
-    def __init__(self, y: int, x: int) -> None:
-        """Construct a new Pair.
-
-        Parameters
-        ----------
-        y : int
-            Y value (row, rank, etc.)
-        x : int
-            X value (column, file, etc.)
-        """
-        self.y = y
-        self.x = x
-
-        if self.y != None and self.x != None:
-            self.row = y+1
-            self.col = chr(self.A + x)
-
-            self.rank = self.row
-            self.file = self.col
-    
-    def get_alg_coords(self) -> str:
-        """Return the algebraic version of this coordinate."""
-        return f"{self.col.lower()}{self.row}"
-
-    def is_negative(self) -> bool:
-        return True if self.x < 0 or self.y < 0 else False
-
-    def is_above(self, maxY, maxX) -> bool:
-        return True if self.x > maxX or self.y > maxY else False
-    
-    def to_standard(self) -> tuple[int, int]:
-        return (self.x, self.y)
-
-    # SPECIAL METHODS
-    def __str__(self) -> str:
-        return self.get_alg_coords()
-    
-    def __repr__(self) -> str:
-        return f"{self.y},{self.x}; {self.col}{self.row}"
-
-    def __bool__(self) -> bool:
-        return (self.x != None and self.y != None)
-
-    def __eq__(self, other: 'Pair' | Any) -> bool:
-        if type(other) == Pair:
-            return self.x == other.x and self.y == other.y
-        else:
-            return False
-    
-    def __getitem__(self, key: int | str) -> int | None:
-        if key == "x" or key == "row" or key == 0:
-            return self.x
-        elif key == "y" or key == "col" or key == 1:
-            return self.y
-        
-class Piece(ABC):
-    """An abstract class representing a chess piece."""
-    def __init__(self, color: Color, type: Type) -> None:
-        self.color = color
-        self.type = type
-        self.has_moved = False
-
-    def __eq__(self, __o: 'Piece') -> bool:
-        if __o:
-            return self.color == __o.color and self.type == __o.type
-        else:
-            return False
-
-    def __str__(self) -> str:
-        return f"{self.color.name} {self.type.name}"
-
-    def __repr__(self) -> str:
-        return self.__str__()
-    
-    def __hash__(self) -> int:
-        return hash((self.color, self.type))
-
-    @abstractmethod
-    def is_valid_path(self, start: Pair, end: Pair) -> bool | Literal['c']:
-        pass
-
-    @abstractmethod
-    def get_path(self, start: Pair, end: Pair) -> list[Pair]:
-        pass
-
-    @abstractmethod
-    def get_all_ends(self, start: Pair) -> list[Pair]:
-        pass
-    
-    @abstractmethod
-    def clone(self):
-        pass
-    
-
-class Pawn(Piece):
-    def __init__(self, color: Color) -> None:
-        super().__init__(color, Type.PAWN)
-
-    def is_valid_path(self, start: Pair, end: Pair) -> bool | Literal['c']:
-        # Color determines direction
-        if start.x == end.x: # Going straight
-
-            if start.row + (2*self.color) == end.row: # Going 2 forward?
-                return not self.has_moved # First move?
-            elif start.row + self.color == end.row: # Going 1 forward
-                return True # Always ok
-            else: 
-                return False
-        elif (abs(start.x-end.x)) and (start.row + self.color == end.row): # Capture?
-            return 'c' # Return c because this move is only valid if it is a capture
-        else: # No valid options
-            return False
-
-    def get_path(self, start: Pair, end: Pair):
-        path: list[Pair] = list() # List of coordinate the piece will move
-
-        if start.x != end.x: # If the pawn is moving diagonally (capture)
-            path = [end]
-        else: # If the pawn is moving straight 
-            path = [Pair(start.y+self.color, start.x), Pair(start.y+2*self.color, start.x)]
-
-        return path
-    
-    def get_all_ends(self, start: Pair) -> list[Pair]:
-        ends: list[Pair] = list()
-        
-        ends.append(Pair(start.y+self.color, start.x))
-        ends.append(Pair(start.y+self.color, start.x+1))
-        ends.append(Pair(start.y+self.color, start.x-1))
-        
-        if not self.has_moved:
-            ends.append(Pair(start.y+(2*self.color), start.x))
-            
-        i = 0
-        while i < len(ends):
-            if ends[i].x < 0 or ends[i].y < 0:
-                ends.pop(i)
-            else:
-                i += 1
-            
-        return ends
-
-    def clone(self):
-        return Pawn(self.color)
-
-        
-class Rook(Piece):
-    def __init__(self, color: Color):
-        super().__init__(color, Type.ROOK)
-
-    def is_valid_path(self, start: Pair, end: Pair):
-        h = start.x == end.x
-        v = start.y == end.y
-
-        if h ^ v: # xor, checking if going horizontally and vertically or not moving
-            return True
-        else: # Must be going both or neither
-            return False
-    
-    def get_path(self, start: Pair, end: Pair):
-        path: list[Pair] = list()
-        path_len: int
-        
-        if start.x < end.x:
-            xDir = 1
-        elif start.x > end.x:
-            xDir = -1
-        else:
-            xDir = 0
-
-        if start.y < end.y:
-            yDir = 1
-        elif start.y > end.y:
-            yDir = -1
-        else:
-            yDir = 0
-
-        if xDir:
-            path_len = abs(start.x-end.x)
-        else:
-            path_len = abs(start.y-end.y)
-
-        for i in range(1, path_len+1): # Goes from 1 to length of path
-
-            if xDir: # If x is not constant
-                path.append(Pair(start.y, start.x + i*xDir)) # Y is constant 
-            else:
-                path.append(Pair(start.y + i*yDir, start.x)) # X is constant
-
-        return path
-    
-    @staticmethod
-    def get_all_ends(start: Pair, max_dist: int=8) -> list[Pair]:
-        ends: list[Pair] = list()
-        
-        for x in range(-max_dist, max_dist):
-            if x != 0 and start.x + x >= 0:
-                ends.append(Pair(start.y, start.x+x))
-            
-        for y in range(-max_dist, max_dist):
-            if y != 0 and start.y + y >= 0:
-                ends.append(Pair(start.y+y, start.x))
-            
-        # ends.sort(key = lambda l : (l.y, l.x))
-            
-        return ends
-    
-    def clone(self):
-        return Rook(self.color)
-        
-
-class Knight(Piece):
-    def __init__(self, color: Color):
-        super().__init__(color, Type.KNIGHT)
-    
-    def is_valid_path(self, start: Pair, end: Pair):
-        xDiff = abs(start.x - end.x)
-        yDiff = abs(start.y - end.y)
-
-        # Ensures the path is an L shape (2 one way and 1 the other)
-        # xDiff xor yDiff == 2 and xDiff xor yDiff == 1
-        if ((xDiff == 2) ^ (yDiff == 2)) and ((xDiff == 1) ^ (yDiff == 1)): 
-            return True
-        else:
-            return False
-
-    def get_path(self, start: Pair, end: Pair):
-        return [end]
-    
-    @staticmethod
-    def get_all_ends(start: Pair) -> list[Pair]:
-        y = start.y
-        x = start.x
-        
-        ends = [Pair(y+2, x+1), Pair(y+2, x-1), Pair(y-2, x+1), Pair(y-2, x-1),
-                Pair(y+1, x+2), Pair(y+1, x-2), Pair(y-1, x+2), Pair(y-1, x-2)]
-        
-        i = 0
-        while i < len(ends):
-            if ends[i].x < 0 or ends[i].y < 0:
-                ends.pop(i)
-            else:
-                i += 1
-        
-        return ends
-        
-    def clone(self):
-        return Knight(self.color)
-
-
-class Bishop(Piece):
-    def __init__(self, color: Color):
-        super().__init__(color, Type.BISHOP)
-
-    def is_valid_path(self, start: Pair, end: Pair):
-        return abs(start.x-end.x) == abs(start.y - end.y) and start != end
-
-    def get_path(self, start: Pair, end: Pair):
-        path: list[Pair] = list()
-
-        path_len = abs(start.x-end.x) # Length of the path
-
-        # Finding x and y directions
-        xDir = yDir = 1
-        if start.x > end.x:
-            xDir = -1
-        if start.y > end.y:
-            yDir = -1
-
-        for i in range(1, path_len+1):
-            path.append(Pair(start.y + i*yDir, start.x + i*xDir))
-
-        return path
-    
-    @staticmethod
-    def get_all_ends(start: Pair, max_dist: int=8) -> list[Pair]:
-        ends: list[Pair] = list()
-        
-        for y_dir in (-1, 1):
-            for x_dir in (-1, 1):
-                for y in range(max_dist):
-                    for x in range(max_dist):
-                        if start.x + x*x_dir >= 0 and start.y + y*y_dir >= 0:
-                            ends.append(Pair(start.y+y*y_dir, start.x+x*x_dir))
-
-        # ends.sort(key = lambda l : (l.y, l.x))
-        
-        return ends
-        
-    def clone(self):
-        return Bishop(self.color)
-
-
-class Queen(Piece):
-    def __init__(self, color: Color):
-        super().__init__(color, Type.QUEEN)
-
-    def is_valid_path(self, start: Pair, end: Pair):
-        return Bishop(self.color).is_valid_path(start, end) or Rook(self.color).is_valid_path(start, end)
-
-    def get_path(self, start: Pair, end: Pair):
-
-        xDir = yDir = 0
-        if start.x < end.x:
-            xDir = 1
-        elif start.x > end.x:
-            xDir = -1
-
-        if start.y < end.y:
-            yDir = 1
-        elif start.y > end.y:
-            yDir = -1
-
-        if xDir != 0 and yDir != 0:
-            return Bishop(self.color).get_path(start, end)
-        else:
-            return Rook(self.color).get_path(start, end)
-        
-    @staticmethod
-    def get_all_ends(start: Pair, max_dist:int=8) -> list[Pair]:
-        ends: list[Pair] = list()
-        
-        ends = Bishop.get_all_ends(start, max_dist) + Rook.get_all_ends(start, max_dist)
-        
-        ends.sort(key = lambda l : (l.y, l.x))
-        
-        return ends
-
-    def clone(self):
-        return Queen(self.color)
-
-
-class King(Piece):
-    def __init__(self, color: Color):
-        super().__init__(color, Type.KING)
-        self.has_moved = False
-
-    def is_valid_path(self, start: Pair, end: Pair):
-        return (abs(start.x-end.x) <= 1) and (abs(start.y-end.y) <= 1) and start != end
-
-    def get_path(self, start: Pair, end: Pair):
-        return [end]
-    
-    @staticmethod
-    def get_all_ends(start: Pair) -> list[Pair]:
-        ends: list[Pair] = list()
-        for y_dir in (-1, 0, 1):
-            for x_dir in (-1, 0, 1):
-                new_x = start.x + x_dir
-                new_y = start.y + y_dir
-                
-                if new_x >= 0 and new_y >= 0:
-                    ends.append(Pair(new_y, new_x))
-                    
-        return ends
-
-    def clone(self):
-        return King(self.color)
-
-# Mapping all the types to their `Piece` constructors
-piece_dict: dict[Type, Callable[[Color], None]] = {
-    Type.PAWN   : Pawn,
-    Type.KING   : King,
-    Type.QUEEN  : Queen,
-    Type.ROOK   : Rook,
-    Type.BISHOP : Bishop,
-    Type.KNIGHT : Knight
-}
+# # Testing/Debug
+# from time import perf_counter
 
 class Square:
-        def __init__(self, coordinates: Pair, piece: Piece | None) -> None:
-            self.coords = coordinates
-            self.piece = piece
-        
-        def __str__(self) -> str:
-            return str(self.piece)
-
-        def __repr__(self) -> str:
-            return self.__str__() + f" ({self.coords.get_alg_coords()})"
+    """Stores data about a square on a chess board."""
+    def __init__(self, coordinates: Pair, piece: Piece | None) -> None:
+        self.coords = coordinates
+        self.piece = piece
+    
+    def __str__(self) -> str:
+        return str(self.piece)
+    
+    def __repr__(self) -> str:
+        return self.__str__() + f" ({self.coords.get_alg_coords()})"
 
 class ChessBoard:
     # CONSTRUCTOR
@@ -505,14 +131,31 @@ class ChessBoard:
 
     # MODIFIER METHODS
     def set_square(self, sqr: Pair, piece: Piece) -> None:
+        """Put a piece on the square.
+
+        Parameters
+        ----------
+        sqr : Pair
+            Coordinate of the square
+        piece : Piece
+            Piece to place
+        """
         self.get_square(sqr).piece = piece
 
     def reset_board(self) -> None:
+        """Reset the board position."""
         self.FEN_set_postion(self.DEFAULT_FEN)
 
     def update_attacked_squares(self):
         """Update attacked_squares_w and attacked_squares_b to accurately show the squares under attack."""
-        # This whole function seems really inefficient. It'll be fine for now but it feels dumb
+        # This whole function IS REALLY INEFFICIENT.
+        # It's partially a Python problem, but this needs to be optimized eventually.
+        
+        # The current solution is letting another thread deal with it if the application is not 
+        # time sensitive. 
+        
+        # Luckily this function isn't necessary to be called often. It's just used for the checkmate functions 
+        # and can be useful for GUIs
 
         def _cull_all():
             """Format data after receiving coordinates from functions."""
@@ -638,10 +281,34 @@ class ChessBoard:
         _cull_all() # Format the data    
     
     # ACCESSOR METHODS
-    def get_square(self, squarePos: Pair) -> Square:
-        return self.board[squarePos.y][squarePos.x]
+    def get_square(self, square_pos: Pair) -> Square:
+        """Return the square at a given position
+
+        Parameters
+        ----------
+        square_pos : Pair
+            Square coordinate
+
+        Returns
+        -------
+        Square
+            The requested square
+        """
+        return self.board[square_pos.y][square_pos.x]
 
     def get_king_position(self, color: Color) -> Pair:
+        """Find and return the position of the king.
+
+        Parameters
+        ----------
+        color : Color
+            Color of the king to find
+
+        Returns
+        -------
+        Pair
+            Coordinate of the king
+        """
         for rank in range(len(self.board)):
             for file in range(len(self.board[rank])):
                 square = self.get_square(Pair(rank, file))
@@ -649,6 +316,20 @@ class ChessBoard:
                     return Pair(rank, file)
         
     def in_attacked(self, coord: Pair, side: Color) -> bool:
+        """Determine if the given coordinate is 
+
+        Parameters
+        ----------
+        coord : Pair
+            Coordinate to check
+        side : Color
+            Color being attacked
+
+        Returns
+        -------
+        bool
+            If the square is being attacked by the opposite color
+        """
         atk = None
         if side == Color.WHITE:
             atk = self.attacked_squares_b
@@ -774,6 +455,18 @@ class ChessBoard:
             
     @staticmethod
     def in_board(pair: Pair) -> bool:
+        """Return if the coordinate is within the board.
+
+        Parameters
+        ----------
+        pair : Pair
+            Coordinate to check
+
+        Returns
+        -------
+        bool
+            If it is in the board
+        """
         if pair.y >= 0 and pair.y < 8 and pair.x >= 0 and pair.x < 8:
             return True
         
@@ -814,35 +507,38 @@ class ChessBoard:
 
         return rtn
 
-class GameStates(DLL):
-    MAX = 1000
+### Future feature ###
+
+# class GameStates(DLL):
+#     MAX = 1000
     
-    def __init__(self, start_state):
-        super().__init__(start_state)
-        self.start = start_state
+#     def __init__(self, start_state):
+#         super().__init__(start_state)
+#         self.start = start_state
     
-    def add_state(self, state: 'Chess'):
-        if self.len + 1 < self.MAX:
-            self.add_end(state)
+#     def add_state(self, state: 'Chess'):
+#         if self.len + 1 < self.MAX:
+#             self.add_end(state)
         
-    def remove_state(self):
-        self.remove_last()
+#     def remove_state(self):
+#         self.remove_last()
         
-    def new_branch(self, state: 'Chess'=None):
-        if self.current.next:
-            self.current.next.previous = None # Delete the pointer of the next node
-        if state:
-            self.current.next = Node(state, None, self.current) # Set the next pointer to the new branch
-            self.tail = self.current.next
-        else:
-            self.tail = self.current
-        self._count_len()
-        
+#     def new_branch(self, state: 'Chess'=None):
+#         if self.current.next:
+#             self.current.next.previous = None # Delete the pointer of the next node
+#         if state:
+#             self.current.next = Node(state, None, self.current) # Set the next pointer to the new branch
+#             self.tail = self.current.next
+#         else:
+#             self.tail = self.current
+#         self._count_len()
+   
+### Please ignore ###     
 
 class Chess:
     """Play a game of chess."""
 
-    def __init__(self, save_moves=True) -> None:
+    def __init__(self) -> None:
         self.board = ChessBoard()
         self.white_cap: list[Piece] = list() # Captured white pieces
         self.black_cap: list[Piece] = list() # Captured black pieces
@@ -853,20 +549,16 @@ class Chess:
         
         self.all_legal_w: list[str] = list()
         self.all_legal_b: list[str] = list()
-        
-        self.game_states = None
-        if save_moves:
-            self.game_states = GameStates(Chess(False))
             
         self.en_pass_capture: Pair = Pair(None, None)
         
     @classmethod
     def bare(cls):
+        """Bare copy."""
         game = cls.__new__(cls)
         
         game.board = ChessBoard()
         game.en_pass = None
-        game.game_states = None
         
         return game
     
@@ -984,6 +676,7 @@ class Chess:
         
         return legal
     
+    # Optimized legal move checking for Rooks, Bishops, & Queen
     def __rook_legal(self, pair: Pair):
         piece = self.get_piece(pair)
         legal: list[Pair] = list()
@@ -1108,8 +801,7 @@ class Chess:
         return legal
     
     def update_all_legal(self) -> None:
-        """Update legal move lists
-        """
+        """Update legal move lists. """
         self.all_legal_w = self.all_legal_moves(Color.WHITE)
         self.all_legal_b = self.all_legal_moves(Color.BLACK)
     
@@ -1228,19 +920,33 @@ class Chess:
         self.white_turn = not self.white_turn
         
         self.board.update_attacked_squares()
-        if self.game_states:
-            self.game_states.add_state(self.generic_copy())
         
         return True, cap
     
     def next_move(self, frm: Pair, to: Pair) -> tuple['Chess', bool]:
+        """Attempt the next move and return a copy of the its game state
+
+        Returns
+        -------
+        (Chess, bool)
+            Chess - The game state
+            bool - if the move was successful
+        """
         new_chess = self.bare_copy()
         rtn, _ = new_chess.__move(frm, to, False)
         
         return new_chess, rtn
     
     def castle(self, frm: Pair, to: Pair) -> None:
-            
+        """Castle.
+
+        Parameters
+        ----------
+        frm : Pair
+            King coordinate
+        to : Pair
+            Rook coordinate
+        """
         # Move the king and rook
         if frm.x < to.x:
             self.board.move(frm, Pair(to.y, frm.x + 2))
@@ -1250,7 +956,21 @@ class Chess:
             self.board.move(to, Pair(to.y, frm.x - 1))
     
     def can_castle(self, frm: Pair, to: Pair) -> bool:
+        """Return if the king can castle.
 
+        Parameters
+        ----------
+        frm : Pair
+            King coordinate
+        to : Pair
+            Rook coordinate
+
+        Returns
+        -------
+        bool
+            If the king can castle
+        """
+        
         if not(
             to == alg_to_pair("a1") or to == alg_to_pair("h1") or to == alg_to_pair("a8") or to == alg_to_pair("h8")
             ):
@@ -1485,6 +1205,7 @@ class Chess:
         self.full_move = int(sects[5]) 
         
     def bare_copy(self) -> 'Chess':
+        """Bare copy."""
         new_chess = self.bare()
         new_chess.set_FEN(self.get_FEN())
         new_chess.white_turn = self.white_turn
@@ -1493,6 +1214,7 @@ class Chess:
         return new_chess
         
     def generic_copy(self) -> 'Chess':
+        """Generic copy."""
         new_chess = Chess(False)
         new_chess.set_FEN(self.get_FEN())
         new_chess.white_turn = self.white_turn
@@ -1502,6 +1224,7 @@ class Chess:
         return new_chess
         
     def copy(self) -> 'Chess':
+        """Full copy."""
         new_chess = Chess(True)
         new_chess.set_FEN(self.get_FEN())
         new_chess.white_turn = self.white_turn
@@ -1532,51 +1255,53 @@ def alg_to_pair(string: str) -> Pair:
     """
     return Pair(int(string[1])-1, Column[string[0]].value)
 
-def in2D(data: Any, lst: list[list[Any]]) -> bool:
-    for row in lst:
-        if data in row:
-            return True
+## Unused ##
+# def in2D(data: Any, lst: list[list[Any]]) -> bool:
+#     for row in lst:
+#         if data in row:
+#             return True
         
-    return False
+#     return False
  
-def main():
-    def __formatted_legal_moves(c: Chess, color: Color) -> str:
-        string = list()
-        legal = c.all_legal_moves(color)
-        for row in legal:
-            row_string = [f"{c.get_piece(row[0]).type.value}{row[0].__str__()}:"]
-            for col in row[1]:
-                row_string.append(f"{c.get_piece(col) or ''}{col.__str__()}")
+### Main method ###
+# def main():
+#     def __formatted_legal_moves(c: Chess, color: Color) -> str:
+#         string = list()
+#         legal = c.all_legal_moves(color)
+#         for row in legal:
+#             row_string = [f"{c.get_piece(row[0]).type.value}{row[0].__str__()}:"]
+#             for col in row[1]:
+#                 row_string.append(f"{c.get_piece(col) or ''}{col.__str__()}")
                 
-            string.append(" ".join(row_string))
+#             string.append(" ".join(row_string))
             
-        return "\n".join(string)
+#         return "\n".join(string)
             
         
-    c = Chess()
-    print(c.board.__repr__())
-    print(c.castle_options())
-    # c.board.move(alg_to_pair("h7"), alg_to_pair("h6"))
-    # c.board.move(alg_to_pair("h8"), alg_to_pair("h7"))
-    # print(c.board.__repr__())
-    # print(c.castle_options())
+#     c = Chess()
+#     print(c.board.__repr__())
+#     print(c.castle_options())
+#     # c.board.move(alg_to_pair("h7"), alg_to_pair("h6"))
+#     # c.board.move(alg_to_pair("h8"), alg_to_pair("h7"))
+#     # print(c.board.__repr__())
+#     # print(c.castle_options())
     
-    c.set_FEN("r3k2r/pppppppp/8/8/8/8/PPPPPPPP/R3K2R w KQkq - 0 1")
+#     c.set_FEN("r3k2r/pppppppp/8/8/8/8/PPPPPPPP/R3K2R w KQkq - 0 1")
     
-    # Show every piece and whether or not it has moved
-    for row in range(8):
-        for col in range(8):
-            piece = c.get_piece(Pair(row, col))
-            if piece:
-                print(f"{piece} at {Pair(row, col).get_alg_coords()} has moved: {piece.has_moved}")
+#     # Show every piece and whether or not it has moved
+#     for row in range(8):
+#         for col in range(8):
+#             piece = c.get_piece(Pair(row, col))
+#             if piece:
+#                 print(f"{piece} at {Pair(row, col).get_alg_coords()} has moved: {piece.has_moved}")
     
-    print(__formatted_legal_moves(c, Color.BLACK))
+#     print(__formatted_legal_moves(c, Color.BLACK))
     
-    print(c.castle(alg_to_pair("e1"), alg_to_pair("a1")))
-    print(c.castle(alg_to_pair("e8"), alg_to_pair("h8")))
+#     print(c.castle(alg_to_pair("e1"), alg_to_pair("a1")))
+#     print(c.castle(alg_to_pair("e8"), alg_to_pair("h8")))
     
-    print(c.__repr__())
+#     print(c.__repr__())
     
 
-if __name__ == "__main__":
-    main()
+# if __name__ == "__main__":
+#     main()

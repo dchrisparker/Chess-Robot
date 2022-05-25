@@ -1,18 +1,16 @@
-from enum import Enum, auto, IntEnum
+# Enumeration
+from enum import Enum, IntEnum
 
 class Color(IntEnum):
-        WHITE = 1
-        BLACK = -1
+    """Piece color."""
+    WHITE = 1
+    BLACK = -1
 
 class Type(Enum):
+    """Piece type."""
     PAWN, ROOK, KNIGHT, BISHOP, QUEEN, KING = 'P', 'R', 'N', 'B', 'Q', 'K'
 
 class Column(IntEnum):
+    """Column labels."""
     A, B, C, D, E, F, G, H = tuple(range(0,8))
     a, b, c, d, e, f, g, h = tuple(range(0,8))
-    
-class GameState(Enum):
-    RUNNING = "Running"
-    WHITE_WIN = W_WIN = "White Wins"
-    BLACK_WIN = B_WIN = "Black Wins"
-    DRAW = "Draw"

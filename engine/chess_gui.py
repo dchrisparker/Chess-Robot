@@ -1,17 +1,28 @@
 # By Chris Parker
 
 ### IMPORTS ###
+# Threading
 from time import sleep
 import threading
+
+# Logging
 import logging
+
+# Typing
 from typing import Any
+
+# Config file
 import yaml
 
-from chess import Bishop, Knight, Pair, ChessBoard, Chess, Queen, Rook, alg_to_pair
+# Chess 
+from chess import ChessBoard, Chess, alg_to_pair
+from pair import Pair
+from pieces import *
 from chess_enum import Type
-from chess_enum import Color as PColor
-from uciEngine import Stockfish
+from chess_enum import Color as PColor # Color is already a keyword in this file
+from uciEngine import UCIEngine
 
+# Pygame
 import pygame
 from pygame.locals import (SRCALPHA, KEYDOWN, K_x, QUIT)
 
@@ -456,7 +467,7 @@ class GameLoop:
     """Main game loop."""
     def __init__(self):
         # Initialize engine, needs more time than PyGame
-        self.engine = Stockfish(ENGINE_PATH, *ENGINE_ARGS, **ENGINE_KWARGS)
+        self.engine = UCIEngine(ENGINE_PATH, *ENGINE_ARGS, **ENGINE_KWARGS)
         logging.info("Starting engine at path %s with settings %s \n %s", ENGINE_PATH, ENGINE_ARGS, ENGINE_KWARGS)
         
         # Initialize pygame
@@ -470,7 +481,7 @@ class GameLoop:
         self.board = GBoard()
         self.BOARD_POS = (int(SCREEN_WIDTH * .05), int(SCREEN_HEIGHT * .05))
         
-        self.game = Chess(False)
+        self.game = Chess()
         self.raw_board = self.game.board.board
         
         # Pieces 

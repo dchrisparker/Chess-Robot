@@ -308,7 +308,7 @@ class UCIEngine:
         return rtn
 
 
-    # Flusing stdout and stdin
+    # Flushing stdout and stdin
 
     def _flush_in(self) -> None:
         """Flush engine stdin."""
@@ -364,7 +364,7 @@ class UCIEngine:
         f.close()
 
 
-    # Stoping engine
+    # Stopping engine
 
     def close(self, logPath: str | PathLike="") -> None:
         """Close the engine and write logs to file if path is provided.
