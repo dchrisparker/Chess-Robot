@@ -1,8 +1,10 @@
 # Chess-Robot
-***CURRENTLY IN DEVELOPMENT***
+***CURRENTLY ABANDONED***
 
 Chess playing table
 
-Requires REV Robotics equipment and FTC Robotics librararies (found in [lib](lib))
+Older versions used proprietary REV robotics for mechanical control, but as of the current commit, we fully switched to an Arudino-esque microcontroller.
 
-Uses code from [this](https://github.com/StPaulAcademy/HOMAR-FTC-Library/blob/master/src/main/java/edu/spa/ftclib/internal/Log.java) Repo for logging values.
+Stockfish is the backend engine for the app, the source code and license is included in this repo.
+
+View our site [here](https://sites.google.com/view/revengeofthechessrobot/home) for more information.
